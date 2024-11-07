@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useCallStore } from "../stores/useCallStore";
 import profileImage from "../assets/profile.png";
+import stompClient from "../utils/webSocketClient"; // WebSocket 클라이언트 추가
 
 const users = [
 	{ id: 1, name: "SangJun", profileImage: profileImage },
@@ -22,6 +23,39 @@ const CallPage: React.FC = () => {
 		iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 	};
 
+	// WebSocket 초기화 및 구독
+	useEffect(() => {
+		stompClient.activate();
+
+		stompClient.subscribe("/queue/{userId}/call", (message) => {
+			console.log("Received Call Request:", message.body);
+			// 수신자에게 통화 요청 로직 추가
+			receiveCall();
+		});
+
+		stompClient.subscribe("/queue/{userId}/accept", (message) => {
+			console.log("Call Accepted:", message.body);
+			// 통화 수락 로직 추가
+			handlePeerConnection();
+		});
+
+		stompClient.subscribe("/queue/{userId}/reject", (message) => {
+			console.log("Call Rejected:", message.body);
+			// 통화 거절 로직 추가
+			endCall();
+		});
+
+		stompClient.subscribe("/topic/end", (message) => {
+			console.log("Call Ended:", message.body);
+			// 통화 종료 로직 추가
+			handleEndCall();
+		});
+
+		return () => {
+			stompClient.deactivate();
+		};
+	}, []);
+
 	// 음성 권한 요청 및 통화 시작
 	const handleInitiateCall = async (user) => {
 		try {
@@ -30,42 +64,49 @@ const CallPage: React.FC = () => {
 			localStreamRef.current = localStream;
 
 			initiateCall(user);
-			setTimeout(() => receiveCall(), 1000); // 1초 뒤 상대방에게 ringing 상태로 전환
+			stompClient.publish({
+				destination: "/app/call",
+				body: JSON.stringify({ caller: "currentUserId", receiver: user.id }),
+			});
 
 			// PeerConnection 설정
-			const peerConnection = new RTCPeerConnection(iceServers);
-			peerConnectionRef.current = peerConnection;
-
-			// 로컬 오디오 트랙을 PeerConnection에 추가
-			localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
-
-			// 원격 스트림 설정
-			peerConnection.ontrack = (event) => {
-				if (remoteAudioRef.current) {
-					remoteAudioRef.current.srcObject = event.streams[0];
-				}
-			};
-
-			// ICE Candidate 수신 후 전송
-			peerConnection.onicecandidate = (event) => {
-				if (event.candidate) {
-					// Signaling 서버에 ICE Candidate 전송 (예: socket.emit)
-					console.log("Send ICE Candidate", event.candidate);
-				}
-			};
-
-			// Offer 생성 및 설정
-			const offer = await peerConnection.createOffer();
-			await peerConnection.setLocalDescription(offer);
-
-			// Offer 전송 (예: socket.emit)
-			console.log("Send Offer", offer);
+			handlePeerConnection();
 		} catch (error) {
 			console.error("Error accessing audio devices:", error);
 			alert(
 				"Audio permission is required to make a call. Please enable it in your browser settings."
 			);
 		}
+	};
+
+	// PeerConnection 설정
+	const handlePeerConnection = () => {
+		const peerConnection = new RTCPeerConnection(iceServers);
+		peerConnectionRef.current = peerConnection;
+
+		// 로컬 오디오 트랙을 PeerConnection에 추가
+		if (localStreamRef.current) {
+			localStreamRef.current
+				.getTracks()
+				.forEach((track) => peerConnection.addTrack(track, localStreamRef.current!));
+		}
+
+		// 원격 스트림 설정
+		peerConnection.ontrack = (event) => {
+			if (remoteAudioRef.current) {
+				remoteAudioRef.current.srcObject = event.streams[0];
+			}
+		};
+
+		// ICE Candidate 수신 후 전송
+		peerConnection.onicecandidate = (event) => {
+			if (event.candidate) {
+				stompClient.publish({
+					destination: "/app/candidate",
+					body: JSON.stringify({ candidate: event.candidate }),
+				});
+			}
+		};
 	};
 
 	// 통화 종료
@@ -76,6 +117,10 @@ const CallPage: React.FC = () => {
 		if (localStreamRef.current) {
 			localStreamRef.current.getTracks().forEach((track) => track.stop());
 		}
+		stompClient.publish({
+			destination: "/app/end",
+			body: JSON.stringify({ user: "currentUserId" }),
+		});
 	};
 
 	return (
@@ -123,7 +168,6 @@ export default CallPage;
 
 // Styled Components (이전과 동일)
 
-// Styled Components
 const Wrapper = styled.div`
 	display: flex;
 	flex-direction: column;
@@ -137,8 +181,9 @@ const Wrapper = styled.div`
 const IdleContainer = styled.div`
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start; // 왼쪽 정렬
-	width: 300px;
+	align-items: flex-start;
+	width: 80%;
+	height: 75%;
 	padding: 20px;
 	background-color: #ffffff;
 	border-radius: 8px;
@@ -156,12 +201,13 @@ const UserContainer = styled.div`
 	align-items: center;
 	justify-content: space-between;
 	width: 100%;
+	height: 20%;
 	padding: 10px 0;
 	border-bottom: 1px solid #e0e0e0;
 `;
 
 const UserName = styled.h3`
-	font-size: 16px;
+	font-size: 32px;
 	color: #333;
 	margin: 0;
 `;
@@ -175,7 +221,7 @@ const ActionButton = styled.button`
 	background-color: #007bff;
 	color: white;
 	padding: 8px 16px;
-	font-size: 14px;
+	font-size: 32px;
 	border: none;
 	border-radius: 4px;
 	cursor: pointer;
@@ -186,7 +232,7 @@ const ActionButton = styled.button`
 `;
 
 const CallingText = styled.div`
-	font-size: 20px;
+	font-size: 32px;
 	color: #007bff;
 `;
 
@@ -196,13 +242,15 @@ const CallContainer = styled.div`
 	align-items: center;
 	background-color: #fff;
 	padding: 20px;
+	padding-top: 110px;
 	border-radius: 8px;
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-	width: 300px;
+	width: 30%;
+	height: 30%;
 `;
 
 const CallText = styled.h2`
-	font-size: 24px;
+	font-size: 32px;
 	color: #333;
 	margin-bottom: 20px;
 `;
@@ -228,14 +276,14 @@ const OnCallContainer = styled.div`
 `;
 
 const ProfileImage = styled.img`
-	width: 40px;
-	height: 40px;
+	width: 80px;
+	height: 80px;
 	border-radius: 50%;
 	margin-right: 10px;
 `;
 
 const ProfileName = styled.h2`
-	font-size: 20px;
+	font-size: 32px;
 	color: #333;
 	margin-bottom: 20px;
 `;
@@ -248,6 +296,6 @@ const EndCallButton = styled(ActionButton)`
 `;
 
 const RejectedText = styled.div`
-	font-size: 20px;
+	font-size: 32px;
 	color: #f44336;
 `;
