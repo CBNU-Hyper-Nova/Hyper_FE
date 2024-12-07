@@ -1,10 +1,13 @@
 // src/components/VideoCall.tsx
-import React, { useRef, useEffect } from "react";
-import { useCallStore } from "../store/callStore";
-import DetectedSentence from "./DetectedSentence";
+import React, { useRef, useEffect, useState } from "react";
 import styled from "styled-components";
+import { useCallStore } from "../store/callStore";
 import { theme } from "../theme";
+import { Holistic } from "@mediapipe/holistic";
+import { Camera } from "@mediapipe/camera_utils";
+import DetectedSentence from "./DetectedSentence";
 
+// 스타일 정의
 const VideoContainer = styled.div`
 	position: relative;
 	width: 80%;
@@ -75,66 +78,159 @@ const EndCallButton = styled(ControlButton)`
 	}
 `;
 
+const FRAME_BATCH_SIZE = 120; // 120프레임 (약 4초 정도 assuming 30fps)
+
 const VideoCall: React.FC = () => {
 	const localVideoRef = useRef<HTMLVideoElement>(null);
 	const remoteVideoRef = useRef<HTMLVideoElement>(null);
-	const {
-		endCall,
-		setDetectedSentence,
-		cameraOn,
-		micOn,
-		localStream,
-		remoteStream,
-		setLocalStream,
-		setRemoteStream,
-	} = useCallStore();
+
+	const { endCall, setDetectedSentence, cameraOn, micOn, localStream, remoteStream } =
+		useCallStore();
+
+	const holisticRef = useRef<Holistic | null>(null);
+	const cameraRef = useRef<Camera | null>(null);
+
+	// 프레임 처리 관련 변수
+	const [landmarkDataBuffer, setLandmarkDataBuffer] = useState<any[]>([]);
+	const frameCounterRef = useRef<number>(0);
 
 	useEffect(() => {
-		// 로컬 스트림 설정
-		const getLocalStream = async () => {
-			try {
-				const stream = await navigator.mediaDevices.getUserMedia({
-					video: true,
-					audio: true,
+		const initHolistic = async () => {
+			const { Holistic } = await import("@mediapipe/holistic");
+			holisticRef.current = new Holistic({
+				locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+			});
+
+			holisticRef.current.setOptions({
+				modelComplexity: 1,
+				smoothLandmarks: true,
+				minDetectionConfidence: 0.5,
+				minTrackingConfidence: 0.5,
+			});
+
+			holisticRef.current.onResults(onResults);
+
+			if (localVideoRef.current) {
+				cameraRef.current = new Camera(localVideoRef.current, {
+					onFrame: async () => {
+						if (holisticRef.current && localVideoRef.current) {
+							await holisticRef.current.send({ image: localVideoRef.current });
+						}
+					},
+					width: 640,
+					height: 480,
 				});
-				setLocalStream(stream);
-				if (localVideoRef.current) {
-					localVideoRef.current.srcObject = stream;
-				}
-				// 원격 스트림 설정
-				// TODO: 실제 구현 시 주석 해제
-				/*
-        const remoteStream = await createRemoteStream();
-        setRemoteStream(remoteStream);
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-        }
-        */
-				// 모킹용 코드 (테스트를 위해 샘플 비디오 사용)
-				const remoteVideo = await fetch("/sample-video.mp4");
-				const remoteVideoBlob = await remoteVideo.blob();
-				const remoteVideoURL = URL.createObjectURL(remoteVideoBlob);
-				if (remoteVideoRef.current) {
-					remoteVideoRef.current.src = remoteVideoURL;
-				}
-			} catch (error) {
-				console.error("로컬 스트림 가져오기 실패:", error);
+				cameraRef.current.start();
 			}
 		};
 
-		getLocalStream();
+		initHolistic();
 
 		return () => {
-			// 스트림 정리
-			if (localStream) {
-				localStream.getTracks().forEach((track) => track.stop());
+			if (holisticRef.current) {
+				holisticRef.current.close();
 			}
-			if (remoteStream) {
-				remoteStream.getTracks().forEach((track) => track.stop());
+			if (cameraRef.current) {
+				cameraRef.current.stop();
 			}
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	const onResults = (results: any) => {
+		frameCounterRef.current++;
+		const frame_num = frameCounterRef.current;
+		// Mediapipe 결과에서 랜드마크 추출
+		const poseLandmarks = results.poseLandmarks || [];
+		const leftHandLandmarks = results.leftHandLandmarks || [];
+		const rightHandLandmarks = results.rightHandLandmarks || [];
+
+		const now = Date.now(); // 현재 타임스탬프(ms)
+		const currentFrameData: any[] = [];
+
+		// pose: 33개 가정
+		poseLandmarks.forEach((lm: any, idx: number) => {
+			currentFrameData.push({
+				frame_num,
+				landmark_type: "pose",
+				index: idx,
+				x: lm.x,
+				y: lm.y,
+				z: lm.z,
+				time: now,
+				label: "", // 현재 레이블 없음
+			});
+		});
+
+		// left_hand: 21개 가정
+		leftHandLandmarks.forEach((lm: any, idx: number) => {
+			currentFrameData.push({
+				frame_num,
+				landmark_type: "left_hand",
+				index: idx,
+				x: lm.x,
+				y: lm.y,
+				z: lm.z,
+				time: now,
+				label: "",
+			});
+		});
+
+		// right_hand: 21개 가정
+		rightHandLandmarks.forEach((lm: any, idx: number) => {
+			currentFrameData.push({
+				frame_num,
+				landmark_type: "right_hand",
+				index: idx,
+				x: lm.x,
+				y: lm.y,
+				z: lm.z,
+				time: now,
+				label: "",
+			});
+		});
+
+		setLandmarkDataBuffer((prev) => [...prev, ...currentFrameData]);
+
+		// 120프레임마다 전송
+		if (frame_num % FRAME_BATCH_SIZE === 0) {
+			sendDataToBackend();
+		}
+	};
+
+	const sendDataToBackend = async () => {
+		const timestamp = Date.now();
+		const dataToSend = {
+			timestamp: timestamp,
+			data: landmarkDataBuffer,
+		};
+
+		console.log(`>> ${FRAME_BATCH_SIZE}프레임 데이터 전송 시작 (약 4초치 데이터)`);
+		console.log("전송할 데이터 크기:", dataToSend.data.length);
+		console.log("전송 타임스탬프:", timestamp);
+
+		try {
+			const response = await fetch("http://localhost:5000/process-keypoints", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(dataToSend),
+			});
+
+			if (!response.ok) {
+				console.error("백엔드 응답 오류:", response.statusText);
+				return;
+			}
+
+			const result = await response.json();
+			console.log("백엔드 응답:", result);
+			setDetectedSentence(result.sentence);
+		} catch (error) {
+			console.error("백엔드 전송 오류:", error);
+		} finally {
+			// 전송 후 버퍼 초기화
+			setLandmarkDataBuffer([]);
+			console.log(">> 전송 완료, 버퍼 초기화");
+		}
+	};
 
 	useEffect(() => {
 		// 마이크 On/Off 처리
@@ -152,7 +248,6 @@ const VideoCall: React.FC = () => {
 				track.enabled = cameraOn;
 			});
 		}
-		// 작은 화면이 카메라 On/Off에 따라 나타나도록 설정
 		if (cameraOn) {
 			if (localVideoRef.current) {
 				localVideoRef.current.srcObject = localStream;
@@ -165,36 +260,27 @@ const VideoCall: React.FC = () => {
 	}, [cameraOn, localStream]);
 
 	useEffect(() => {
-		// 디텍션 모킹
-		let intervalId: NodeJS.Timeout;
-		intervalId = setInterval(() => {
-			const sentences = [
-				"안녕하세요",
-				"반갑습니다",
-				"도와드릴까요",
-				"괜찮습니다",
-				"감사합니다",
-				"좋은 하루 되세요",
-			];
-			const randomSentence = sentences[Math.floor(Math.random() * sentences.length)];
-			setDetectedSentence(randomSentence);
-		}, 3000);
-
-		return () => {
-			if (intervalId) clearInterval(intervalId);
-		};
-	}, [setDetectedSentence]);
+		// 원격 스트림 설정
+		// TODO: 실제 구현 시 주석 해제
+		/*
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+    */
+		// 모킹용 코드 (테스트를 위해 샘플 비디오 사용)
+		if (remoteVideoRef.current) {
+			remoteVideoRef.current.src = "/sample-video.mp4";
+		}
+	}, [remoteStream]);
 
 	return (
 		<div>
 			<VideoContainer>
 				{/* 상대방 영상 */}
-				<VideoElement ref={remoteVideoRef} autoPlay playsInline />
-				{/* 상대방 카메라가 꺼졌을 때 프로필 이미지 표시 */}
+				<VideoElement ref={remoteVideoRef} autoPlay playsInline muted />
 				{!remoteStream && <PlaceholderImage />}
-				{/* 자신의 영상 (작은 화면) */}
-				{cameraOn && <SmallVideo ref={localVideoRef} autoPlay playsInline />}
-				{/* 컨트롤 버튼들 */}
+				{/* 자신의 영상 */}
+				{cameraOn && <SmallVideo ref={localVideoRef} autoPlay playsInline muted />}
 				<Controls>
 					<ControlButton onClick={() => useCallStore.getState().toggleCamera()}>
 						{cameraOn ? <i className='fas fa-video' /> : <i className='fas fa-video-slash' />}
