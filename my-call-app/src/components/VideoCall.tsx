@@ -1,13 +1,13 @@
 // src/components/VideoCall.tsx
 import React, { useRef, useEffect, useState } from "react";
-import styled from "styled-components";
 import { useCallStore } from "../store/callStore";
+import DetectedSentence from "./DetectedSentence";
+import styled from "styled-components";
 import { theme } from "../theme";
 import { Holistic } from "@mediapipe/holistic";
 import { Camera } from "@mediapipe/camera_utils";
-import DetectedSentence from "./DetectedSentence";
 
-// 스타일 정의
+// 스타일 컴포넌트
 const VideoContainer = styled.div`
 	position: relative;
 	width: 80%;
@@ -63,9 +63,14 @@ const ControlButton = styled.button`
 	font-size: 24px;
 	cursor: pointer;
 	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
 	&:hover {
 		background-color: rgba(0, 0, 0, 0.7);
 	}
+
 	i {
 		margin: 0;
 	}
@@ -78,27 +83,34 @@ const EndCallButton = styled(ControlButton)`
 	}
 `;
 
-const FRAME_BATCH_SIZE = 120; // 120프레임 (약 4초 정도 assuming 30fps)
-
 const VideoCall: React.FC = () => {
 	const localVideoRef = useRef<HTMLVideoElement>(null);
 	const remoteVideoRef = useRef<HTMLVideoElement>(null);
-
-	const { endCall, setDetectedSentence, cameraOn, micOn, localStream, remoteStream } =
-		useCallStore();
+	const {
+		endCall,
+		setDetectedSentence,
+		cameraOn,
+		micOn,
+		localStream,
+		remoteStream,
+		setLocalStream,
+		setRemoteStream,
+	} = useCallStore();
 
 	const holisticRef = useRef<Holistic | null>(null);
 	const cameraRef = useRef<Camera | null>(null);
-
-	// 프레임 처리 관련 변수
-	const [landmarkDataBuffer, setLandmarkDataBuffer] = useState<any[]>([]);
-	const frameCounterRef = useRef<number>(0);
+	const [frameNum, setFrameNum] = useState(0); // 프레임 번호 관리
 
 	useEffect(() => {
+		// MediaPipe Holistic 모델 초기화
 		const initHolistic = async () => {
 			const { Holistic } = await import("@mediapipe/holistic");
+			const { drawConnectors, drawLandmarks } = await import("@mediapipe/drawing_utils");
+
 			holisticRef.current = new Holistic({
-				locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+				locateFile: (file) => {
+					return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+				},
 			});
 
 			holisticRef.current.setOptions({
@@ -126,6 +138,7 @@ const VideoCall: React.FC = () => {
 
 		initHolistic();
 
+		// Clean up
 		return () => {
 			if (holisticRef.current) {
 				holisticRef.current.close();
@@ -137,98 +150,84 @@ const VideoCall: React.FC = () => {
 	}, []);
 
 	const onResults = (results: any) => {
-		frameCounterRef.current++;
-		const frame_num = frameCounterRef.current;
-		// Mediapipe 결과에서 랜드마크 추출
+		// 키포인트 추출
+		const keypoints = extractKeypoints(results);
+		if (!keypoints) {
+			// 키포인트가 제대로 추출되지 않았을 경우
+			console.warn("키포인트를 추출하지 못했습니다.");
+			return;
+		}
+		// 타임스탬프 생성
+		const timestamp = Date.now();
+		// 프레임 번호 증가
+		setFrameNum((prev) => prev + 1);
+		// 키포인트와 타임스탬프를 백엔드로 전송
+		sendKeypointsToBackend(frameNum, keypoints, timestamp);
+	};
+
+	const extractKeypoints = (results: any) => {
 		const poseLandmarks = results.poseLandmarks || [];
 		const leftHandLandmarks = results.leftHandLandmarks || [];
 		const rightHandLandmarks = results.rightHandLandmarks || [];
 
-		const now = Date.now(); // 현재 타임스탬프(ms)
-		const currentFrameData: any[] = [];
+		const poseCount = 33;
+		const handCount = 21;
 
-		// pose: 33개 가정
-		poseLandmarks.forEach((lm: any, idx: number) => {
-			currentFrameData.push({
-				frame_num,
-				landmark_type: "pose",
-				index: idx,
-				x: lm.x,
-				y: lm.y,
-				z: lm.z,
-				time: now,
-				label: "", // 현재 레이블 없음
-			});
+		// 포즈 랜드마크 (33개)
+		const pose = Array.from({ length: poseCount }, (_, i) => {
+			const landmark = poseLandmarks[i];
+			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		// left_hand: 21개 가정
-		leftHandLandmarks.forEach((lm: any, idx: number) => {
-			currentFrameData.push({
-				frame_num,
-				landmark_type: "left_hand",
-				index: idx,
-				x: lm.x,
-				y: lm.y,
-				z: lm.z,
-				time: now,
-				label: "",
-			});
+		// 왼손 랜드마크 (21개)
+		const leftHand = Array.from({ length: handCount }, (_, i) => {
+			const landmark = leftHandLandmarks[i];
+			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		// right_hand: 21개 가정
-		rightHandLandmarks.forEach((lm: any, idx: number) => {
-			currentFrameData.push({
-				frame_num,
-				landmark_type: "right_hand",
-				index: idx,
-				x: lm.x,
-				y: lm.y,
-				z: lm.z,
-				time: now,
-				label: "",
-			});
+		// 오른손 랜드마크 (21개)
+		const rightHand = Array.from({ length: handCount }, (_, i) => {
+			const landmark = rightHandLandmarks[i];
+			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		setLandmarkDataBuffer((prev) => [...prev, ...currentFrameData]);
+		// 키포인트를 하나의 배열로 결합 (75 x 3 = 225)
+		const keypoints = [...pose, ...leftHand, ...rightHand].flat(); // [x1, y1, z1, ..., x75, y75, z75]
 
-		// 120프레임마다 전송
-		if (frame_num % FRAME_BATCH_SIZE === 0) {
-			sendDataToBackend();
-		}
+		return keypoints;
 	};
 
-	const sendDataToBackend = async () => {
-		const timestamp = Date.now();
-		const dataToSend = {
-			timestamp: timestamp,
-			data: landmarkDataBuffer,
-		};
-
-		console.log(`>> ${FRAME_BATCH_SIZE}프레임 데이터 전송 시작 (약 4초치 데이터)`);
-		console.log("전송할 데이터 크기:", dataToSend.data.length);
-		console.log("전송 타임스탬프:", timestamp);
-
+	const sendKeypointsToBackend = async (
+		frame_num: number,
+		keypoints: number[],
+		timestamp: number
+	) => {
 		try {
-			const response = await fetch("http://localhost:5000/process-keypoints", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(dataToSend),
-			});
-
-			if (!response.ok) {
-				console.error("백엔드 응답 오류:", response.statusText);
+			if (keypoints.length !== 225) {
+				console.error(`Invalid keypoints length: ${keypoints.length}. Expected 225.`);
 				return;
 			}
 
-			const result = await response.json();
-			console.log("백엔드 응답:", result);
-			setDetectedSentence(result.sentence);
+			const response = await fetch("http://localhost:5001/process-keypoints", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ frame_num, keypoints, timestamp }),
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				// 받은 데이터: { timestamp: number, sentence: string }
+				if (data.sentence) {
+					setDetectedSentence(data.sentence);
+				}
+			} else {
+				const errorData = await response.json();
+				console.error("백엔드 응답 오류:", errorData.error || response.statusText);
+			}
 		} catch (error) {
 			console.error("백엔드 전송 오류:", error);
-		} finally {
-			// 전송 후 버퍼 초기화
-			setLandmarkDataBuffer([]);
-			console.log(">> 전송 완료, 버퍼 초기화");
 		}
 	};
 
@@ -248,6 +247,7 @@ const VideoCall: React.FC = () => {
 				track.enabled = cameraOn;
 			});
 		}
+		// 작은 화면이 카메라 On/Off에 따라 나타나도록 설정
 		if (cameraOn) {
 			if (localVideoRef.current) {
 				localVideoRef.current.srcObject = localStream;
@@ -278,9 +278,11 @@ const VideoCall: React.FC = () => {
 			<VideoContainer>
 				{/* 상대방 영상 */}
 				<VideoElement ref={remoteVideoRef} autoPlay playsInline muted />
+				{/* 상대방 카메라가 꺼졌을 때 프로필 이미지 표시 */}
 				{!remoteStream && <PlaceholderImage />}
-				{/* 자신의 영상 */}
+				{/* 자신의 영상 (작은 화면) */}
 				{cameraOn && <SmallVideo ref={localVideoRef} autoPlay playsInline muted />}
+				{/* 컨트롤 버튼들 */}
 				<Controls>
 					<ControlButton onClick={() => useCallStore.getState().toggleCamera()}>
 						{cameraOn ? <i className='fas fa-video' /> : <i className='fas fa-video-slash' />}
