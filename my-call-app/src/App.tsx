@@ -7,11 +7,13 @@ import IncomingCallModal from "./components/IncomingCallModal";
 import VideoCall from "./components/VideoCall";
 import Login from "./components/Login";
 import SignUp from "./components/SignUp";
-import CallPending from "./components/CallPending"; // 새로운 컴포넌트 임포트
+import CallPending from "./components/CallPending";
 import styled from "styled-components";
 import GlobalStyle from "./globalStyles";
 import { theme } from "./theme";
 import { useSignaling } from "./hooks/useSignaling";
+import CallButton from './components/CallButton';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 const AppContainer = styled.div`
 	font-family: ${theme.fonts.primary};
@@ -78,21 +80,19 @@ const MainContent = styled.main`
 `;
 
 const App: React.FC = () => {
-	useSignaling(); // 시그널링 초기화
+	const { user } = useAuthStore();
+	const { sendMessage } = useSignaling(user?.signalingId || '');
 
-	const { isInCall, isReceiving, isCalling, isCallPending } = useCallStore();
+	const { isInCall, isReceiving, isCalling, isPending } = useCallStore();
 	const { isAuthenticated, logout } = useAuthStore();
 	const [isSignUp, setIsSignUp] = useState(false);
 
 	useEffect(() => {
-		// 수신 모킹 (백엔드에서 실제 구현 시 삭제)
-		// const timer = setTimeout(() => {
-		// 	if (!isInCall && !isCalling) {
-		// 		useCallStore.setState({ isReceiving: true });
-		// 	}
-		// }, 5000);
-		// return () => clearTimeout(timer);
-	}, [isInCall, isCalling]);
+		// 필요한 초기화 작업은 여기서
+		if (user?.signalingId) {
+			// ...
+		}
+	}, [user]);
 
 	if (!isAuthenticated) {
 		return (
@@ -123,10 +123,10 @@ const App: React.FC = () => {
 					<button onClick={logout}>로그아웃</button>
 				</Header>
 				<MainContent>
-					{isCallPending && <CallPending />}
+					{isPending && <CallPending />}
 					{isReceiving && <IncomingCallModal />}
 					{isInCall && <VideoCall />}
-					{!isInCall && !isReceiving && !isCalling && !isCallPending && <FriendsList />}
+					{!isPending && !isInCall && !isReceiving && !isCalling && <FriendsList />}
 				</MainContent>
 			</AppContainer>
 		</>

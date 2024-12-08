@@ -22,23 +22,25 @@ const fadeInUp = keyframes`
 
 const VideoContainer = styled.div`
 	position: relative;
-	width: 80%;
-	max-width: 800px;
-	margin: ${theme.spacing.md} auto;
-	border-radius: ${theme.radius.lg};
-	overflow: hidden;
-	background-color: black;
-	box-shadow: ${theme.shadows.heavy};
-
-	@media (max-width: ${theme.breakpoints.tablet}) {
-		width: 95%;
-	}
+	width: 100%;
+	height: 100vh;
 `;
 
-const VideoElement = styled.video`
+const MainVideo = styled.video`
 	width: 100%;
-	height: auto;
+	height: 100%;
 	object-fit: cover;
+`;
+
+const LocalVideo = styled.video`
+	position: absolute;
+	bottom: 20px;
+	right: 20px;
+	width: 240px;
+	height: 180px;
+	border-radius: 8px;
+	object-fit: cover;
+	border: 2px solid white;
 `;
 
 const PlaceholderImage = styled.div`
@@ -252,13 +254,13 @@ const VideoCall: React.FC = () => {
 				return;
 			}
 
-			const response = await fetch("http://localhost:5001/process-keypoints", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ frame_num, keypoints, timestamp }),
-			});
+			// const response = await fetch("http://localhost:5001/process-keypoints", {
+			// 	method: "POST",
+			// 	headers: {
+			// 		"Content-Type": "application/json",
+			// 	},
+			// 	body: JSON.stringify({ frame_num, keypoints, timestamp }),
+			// });
 
 			if (response.ok) {
 				const data = await response.json();
@@ -268,49 +270,50 @@ const VideoCall: React.FC = () => {
 				}
 			} else {
 				const errorData = await response.json();
-				console.error("백엔드 응답 오류:", errorData.error || response.statusText);
+				//console.error("백엔드 응답 오류:", errorData.error || response.statusText);
 			}
 		} catch (error) {
-			console.error("백엔드 전송 오류:", error);
+			//console.error("백엔드 전송 오류:", error);
 		}
 	};
 
 	useEffect(() => {
-		// 통화 유형에 따른 미디어 스트림 설정
-		const getMedia = async () => {
+		// 로컬 비디오 스트림 설정
+		const setupLocalStream = async () => {
 			try {
-				const constraints: MediaStreamConstraints = {
-					video: callType === "video" ? cameraOn : false,
-					audio: micOn,
-				};
-				const stream = await navigator.mediaDevices.getUserMedia(constraints);
+				const stream = await navigator.mediaDevices.getUserMedia({
+					video: true,
+					audio: true
+				});
+				
 				setLocalStream(stream);
-				if (localVideoRef.current && callType === "video") {
+				
+				if (localVideoRef.current) {
 					localVideoRef.current.srcObject = stream;
 				}
-
-				// PeerConnection에 로컬 스트림 추가
-				if (peerConnection && stream) {
-					stream.getTracks().forEach((track) => {
-						peerConnection.addTrack(track, stream);
-					});
-				}
 			} catch (error) {
-				console.error("미디어 스트림 가져오기 오류:", error);
+				console.error('로컬 스트림 설정 오류:', error);
 			}
 		};
 
-		if (useCallStore.getState().isInCall) {
-			getMedia();
+		if (!localStream) {
+			setupLocalStream();
+		} else if (localVideoRef.current) {
+			localVideoRef.current.srcObject = localStream;
 		}
 
-		// Clean up
+		// 원격 비디오 스트림 설정
+		if (remoteVideoRef.current && remoteStream) {
+			remoteVideoRef.current.srcObject = remoteStream;
+		}
+
+		// cleanup
 		return () => {
 			if (localStream) {
-				localStream.getTracks().forEach((track) => track.stop());
+				localStream.getTracks().forEach(track => track.stop());
 			}
 		};
-	}, [callType, cameraOn, micOn, setLocalStream, peerConnection]);
+	}, [localStream, remoteStream]);
 
 	useEffect(() => {
 		// 카메라 On/Off 처리 (비디오 통화인 경우에만 작동)
@@ -321,13 +324,6 @@ const VideoCall: React.FC = () => {
 		}
 	}, [cameraOn, localStream, callType]);
 
-	useEffect(() => {
-		// 원격 스트림 설정
-		if (remoteVideoRef.current && remoteStream) {
-			remoteVideoRef.current.srcObject = remoteStream;
-		}
-	}, [remoteStream]);
-
 	return (
 		<div>
 			{useCallStore.getState().isInCall && selectedFriend && (
@@ -336,14 +332,8 @@ const VideoCall: React.FC = () => {
 				</Header>
 			)}
 			<VideoContainer>
-				{/* 상대방 영상 */}
-				<VideoElement ref={remoteVideoRef} autoPlay playsInline muted />
-				{/* 상대방 카메라가 꺼졌을 때 프로필 이미지 표시 */}
-				{!remoteStream && <PlaceholderImage />}
-				{/* 자신의 영상 (비디오 통화인 경우에만 표시) */}
-				{callType === "video" && cameraOn && (
-					<SmallVideo ref={localVideoRef} autoPlay playsInline muted />
-				)}
+				<MainVideo ref={remoteVideoRef} autoPlay playsInline />
+				<LocalVideo ref={localVideoRef} autoPlay playsInline muted />
 				{/* 컨트롤 버튼들 */}
 				<Controls>
 					<ToggleButton type='camera' />

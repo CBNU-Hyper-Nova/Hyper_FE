@@ -1,11 +1,13 @@
 // src/components/FriendsList.tsx
-import React from "react";
+import React, { useEffect, useCallback } from "react";
 import { useCallStore } from "../store/callStore";
 import styled from "styled-components";
 import { theme } from "../theme";
 import BaseButton from "./common/BaseButton";
 import Container from "./common/Container";
 import Card from "./common/Card";
+import { useSignaling } from "../hooks/useSignaling";
+import { useAuthStore } from "../store/authStore";
 
 const ProfileImage = styled.img`
 	width: 50px;
@@ -43,83 +45,116 @@ const ButtonsSection = styled.div`
 	}
 `;
 
+const FriendContainer = styled.div`
+	padding: 1rem;
+	width: 100%;
+	max-width: 400px;
+`;
+
+const FriendItem = styled.div`
+	display: flex;
+	align-items: center;
+	padding: 0.5rem;
+	margin-bottom: 0.5rem;
+	border-radius: 8px;
+	background: white;
+`;
+
+const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
+	padding: 0.5rem 1rem;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	background: ${props => props.variant === 'primary' ? '#4CAF50' : '#2196F3'};
+	color: white;
+`;
+
 const FriendsList: React.FC = () => {
-	const { friends, selectFriend, startCall, isCalling, isInCall, signalingId, peerConnection } =
-		useCallStore();
+	const { user } = useAuthStore();
+	const { 
+		friends, 
+		selectFriend, 
+		startCall, 
+		isCalling, 
+		isInCall,
+		setPeerConnection,
+		setIsPending
+	} = useCallStore();
+	const { sendMessage } = useSignaling(user?.signalingId || '', {
+		onCallAccept: (data) => {
+			console.log('통화 수락됨:', data);
+			// 여기서 통화 화면으로 전환
+		},
+		onCallReject: (data) => {
+			console.log('통화 거절됨:', data);
+			setIsPending(false);
+		}
+	});
 
-	const initiateCall = async (type: "audio" | "video") => {
-		const { selectedFriend, signaling, setPeerConnection, setRemoteStream, setLocalStream } =
-			useCallStore.getState();
+	const testFriends = [
+		{ id: 1, name: "test1", signalingId: "test1-signal" },
+		{ id: 2, name: "test2", signalingId: "test2-signal" }
+	];
 
-		if (!selectedFriend || !signalingId || !signaling) {
-			alert("통화를 시작할 친구를 선택하거나 시그널링 서버에 연결되지 않았습니다.");
+	useEffect(() => {
+		console.log('현재 로그인된 사용:', user);
+		console.log('현재 친구 목록:', friends);
+	}, [user, friends]);
+
+	const handleVideoCall = async (friend: Friend) => {
+		if (!user?.signalingId) {
+			console.error('로그인이 필요합니다');
 			return;
 		}
 
-		// 새로운 PeerConnection 생성
-		const configuration: RTCConfiguration = {
-			iceServers: [
-				{ urls: "stun:stun.l.google.com:19302" },
-				// 필요 시 TURN 서버 추가
-			],
-		};
-
-		const pc = new RTCPeerConnection(configuration);
-		setPeerConnection(pc);
-
-		// ICE 후보 발생 시 시그널링 서버로 전송
-		pc.onicecandidate = (event) => {
-			if (event.candidate) {
-				signaling.send(
-					JSON.stringify({
-						type: "ice-candidate",
-						payload: event.candidate,
-						to: selectedFriend.signalingId,
-					})
-				);
-			}
-		};
-
-		// 원격 스트림 수신 시 처리
-		pc.ontrack = (event) => {
-			const remoteStream = new MediaStream();
-			remoteStream.addTrack(event.track);
-			setRemoteStream(remoteStream);
-		};
-
-		// 로컬 스트림 가져오기
 		try {
-			const constraints: MediaStreamConstraints = {
-				video: type === "video" ? { width: 640, height: 480 } : false,
-				audio: true,
-			};
-			const stream = await navigator.mediaDevices.getUserMedia(constraints);
-			setLocalStream(stream);
-			if (type === "video") {
-				// 자신의 비디오를 VideoCall 컴포넌트에서 설정하므로 별도 설정 생략
-			}
-			// PeerConnection에 로컬 스트림 추가
-			stream.getTracks().forEach((track) => {
-				pc.addTrack(track, stream);
-			});
-
-			// Offer 생성 및 전송
-			const offer = await pc.createOffer();
-			await pc.setLocalDescription(offer);
-
-			signaling.send(
-				JSON.stringify({
-					type: "offer",
-					payload: offer,
-					to: selectedFriend.signalingId,
-				})
-			);
-
+			console.log('통화 시도:', friend);
+			
 			// 상태 업데이트
-			startCall(type);
+			selectFriend(friend);
+			setIsPending(true);
+			
+			// 시그널링 메시지 전송
+			sendMessage('call-request', {
+				from: user.signalingId,
+				to: friend.signalingId,
+				type: 'video'
+			});
+			
+			console.log('통화 요청 전송 완료');
 		} catch (error) {
-			console.error("미디어 스트림 가져오기 오류:", error);
-			alert("미디어 스트림을 가져오는 데 실패했습니다.");
+			console.error('통화 요청 실패:', error);
+			setIsPending(false);
+		}
+	};
+
+	const initiateCall = async (type: "audio" | "video") => {
+		const { selectedFriend } = useCallStore.getState();
+		
+		if (!user?.signalingId || !selectedFriend?.signalingId) {
+			console.error("필요한 정보가 없습니다:", { user, selectedFriend });
+			alert("통화를 시작할 수 없습니다. 필요한 정보가 없습니다.");
+			return;
+		}
+
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: type === "video",
+				audio: true
+			});
+			
+			setLocalStream(stream);
+			startCall(type);
+			
+			sendMessage('call-request', {
+				from: user.signalingId,
+				to: selectedFriend.signalingId,
+				type: type
+			});
+		} catch (error) {
+			console.error("통화 시작 실패:", error);
+			alert("통화를 시작할 수 없습니다.");
+			setIsPending(false);
 		}
 	};
 
@@ -132,20 +167,18 @@ const FriendsList: React.FC = () => {
 		initiateCall("audio");
 	};
 
-	const handleVideoCall = (friend: any) => {
-		if (isCalling || isInCall) {
-			alert("현재 다른 통화가 진행 중입니다.");
-			return;
-		}
-		selectFriend(friend);
-		initiateCall("video");
-	};
+	const handleCallRequest = useCallback((data: CallRequestData) => {
+		console.log('통화 요청 수신:', data);
+		setIsPending(true);
+	}, [setIsPending]);
+
+	const { sendMessage: signalSend } = useSignaling(user?.signalingId, {
+		onCallRequest: handleCallRequest
+	});
 
 	return (
-		<Container padding={`${theme.spacing.lg}`} maxWidth='700px'>
-			<h2 style={{ fontFamily: theme.fonts.secondary, marginBottom: theme.spacing.md }}>
-				📞 친구 목록
-			</h2>
+		<FriendContainer>
+			<h2>친구 목록</h2>
 			{friends.map((friend) => (
 				<Card key={friend.id}>
 					<div style={{ display: "flex", alignItems: "center" }}>
@@ -170,7 +203,7 @@ const FriendsList: React.FC = () => {
 					</ButtonsSection>
 				</Card>
 			))}
-		</Container>
+		</FriendContainer>
 	);
 };
 

@@ -2,7 +2,15 @@
 import styled from "styled-components";
 import { theme } from "../../theme";
 
-const BaseButton = styled.button<{ variant?: "primary" | "secondary" | "danger" | "videoCall" }>`
+interface BaseButtonProps {
+	variant?: 'primary' | 'secondary';
+	maxWidth?: string;
+	padding?: string;
+	children: React.ReactNode;
+	onClick?: () => void;
+}
+
+const BaseButton = styled.button<BaseButtonProps>`
 	background-color: ${(props) => {
 		switch (props.variant) {
 			case "secondary":

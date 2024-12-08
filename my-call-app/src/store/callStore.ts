@@ -4,7 +4,7 @@ import { create } from "zustand";
 interface Friend {
 	id: number;
 	name: string;
-	profileImage: string;
+	profileImage?: string;
 	signalingId: string;
 }
 
@@ -26,6 +26,11 @@ interface CallState {
 	signalingId: string | null;
 	peerConnection: RTCPeerConnection | null;
 	signaling: WebSocket | null;
+	callerInfo: {
+		id: string;
+		type: string;
+	} | null;
+	isPending: boolean;
 
 	selectFriend: (friend: Friend) => void;
 	startCall: (type: CallType) => void;
@@ -40,14 +45,29 @@ interface CallState {
 	setSignalingId: (id: string) => void;
 	setPeerConnection: (pc: RTCPeerConnection) => void;
 	setSignaling: (ws: WebSocket) => void;
+	setIsReceiving: (isReceiving: boolean) => void;
+	setIsPending: (isPending: boolean) => void;
+	setCallerInfo: (callerInfo: CallState['callerInfo']) => void;
+	setIsCalling: (isCalling: boolean) => void;
+	setIsInCall: (isInCall: boolean) => void;
 }
 
 export const useCallStore = create<CallState>((set) => ({
 	friends: [
-		{ id: 1, name: "박유경", profileImage: "/profiles/park.jpg", signalingId: "signal-1" },
-		{ id: 2, name: "최가은", profileImage: "/profiles/choi.jpg", signalingId: "signal-2" },
-		{ id: 3, name: "박상준", profileImage: "/profiles/park2.jpg", signalingId: "signal-3" },
+		{ 
+			id: 1, 
+			name: "박유경", 
+			signalingId: "박유경",
+			profileImage: "https://via.placeholder.com/50" 
+		},
+		{ 
+			id: 2, 
+			name: "강재구", 
+			signalingId: "강재구",
+			profileImage: "https://via.placeholder.com/50"
+		}
 	],
+
 	selectedFriend: null,
 	isCalling: false,
 	isReceiving: false,
@@ -62,11 +82,32 @@ export const useCallStore = create<CallState>((set) => ({
 	signalingId: null,
 	peerConnection: null,
 	signaling: null,
+	callerInfo: null,
+	isPending: false,
 
 	selectFriend: (friend) => set({ selectedFriend: friend }),
-	startCall: (type) => set({ isCalling: true, isCallPending: true, callType: type }),
-	receiveCall: () => set({ isReceiving: false, isInCall: true }),
-	rejectCall: () => set({ isReceiving: false, isCallPending: false, callType: null }),
+	startCall: (type) => {
+		console.log('startCall 호출됨:', type);
+		set({ 
+			isCalling: true, 
+			isCallPending: true,
+			callType: type 
+		});
+	},
+	receiveCall: () => set({
+		isReceiving: false,
+		isInCall: true,
+		isCalling: false,
+		isPending: false,
+		callType: 'video'
+	}),
+	rejectCall: () => set({
+		isReceiving: false,
+		isInCall: false,
+		isCalling: false,
+		isPending: false,
+		callerInfo: null
+	}),
 	endCall: () =>
 		set({
 			isCalling: false,
@@ -88,4 +129,21 @@ export const useCallStore = create<CallState>((set) => ({
 	setSignalingId: (id) => set({ signalingId: id }),
 	setPeerConnection: (pc) => set({ peerConnection: pc }),
 	setSignaling: (ws) => set({ signaling: ws }),
+	setIsReceiving: (isReceiving: boolean) => {
+		console.log('setIsReceiving:', isReceiving);
+		set({ isReceiving });
+	},
+	setIsPending: (isPending) => {
+		console.log('setIsPending 호출됨:', isPending);
+		set({ isPending });
+	},
+	setCallerInfo: (callerInfo: CallState['callerInfo']) => {
+		console.log('setCallerInfo:', callerInfo);
+		set({ callerInfo });
+	},
+	setIsCalling: (isCalling) => {
+		console.log('setIsCalling 호출됨:', isCalling);
+		set((state) => ({ ...state, isCalling }));
+	},
+	setIsInCall: (isInCall) => set({ isInCall }),
 }));

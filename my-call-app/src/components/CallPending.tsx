@@ -1,48 +1,40 @@
 // src/components/CallPending.tsx
-import React, { useEffect } from "react";
-import { useCallStore } from "../store/callStore";
+import React from "react";
 import styled from "styled-components";
 import { theme } from "../theme";
-import Container from "./common/Container";
-import Card from "./common/Card";
+import { useCallStore } from "../store/callStore";
 
-const Message = styled.h2`
-	font-family: ${theme.fonts.secondary};
-	color: ${theme.colors.text};
-	font-size: 24px;
+const PendingOverlay = styled.div`
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: ${theme.colors.modalOverlay};
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+`;
 
-	@media (max-width: ${theme.breakpoints.mobile}) {
-		font-size: 20px;
-	}
+const PendingContent = styled.div`
+	background-color: ${theme.colors.white};
+	padding: ${theme.spacing.lg};
+	border-radius: ${theme.radius.lg};
+	text-align: center;
 `;
 
 const CallPending: React.FC = () => {
-	const { isCallPending } = useCallStore();
+	const { isPending, selectedFriend } = useCallStore();
 
-	useEffect(() => {
-		// 테스트 환경에서 1초 후 통화 연결
-		const timer = setTimeout(() => {
-			// TODO: 실제 구현 시 주석 처리된 코드를 사용하세요.
-			useCallStore.setState({ isCallPending: false, isInCall: true });
-
-			// 실제 구현 시
-			/*
-        // 시그널링 서버를 통해 상대방에게 통화 요청을 보내고,
-        // 상대방이 수락하면 isInCall을 true로 설정합니다.
-      */
-		}, 1000);
-
-		return () => clearTimeout(timer);
-	}, []);
-
-	if (!isCallPending) return null;
+	if (!isPending || !selectedFriend) return null;
 
 	return (
-		<Container>
-			<Card>
-				<Message>통화 대기 중...</Message>
-			</Card>
-		</Container>
+		<PendingOverlay>
+			<PendingContent>
+				<h2>{selectedFriend.name}님에게 통화 연결 중...</h2>
+			</PendingContent>
+		</PendingOverlay>
 	);
 };
 
