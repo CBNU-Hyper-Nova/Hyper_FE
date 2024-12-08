@@ -8,15 +8,26 @@ const Button = styled.button<{ active: boolean }>`
 	background-color: ${(props) => (props.active ? theme.colors.white : theme.colors.danger)};
 	border: none;
 	color: ${(props) => (props.active ? theme.colors.primary : theme.colors.white)};
-	padding: 10px;
-	margin: 0 10px;
+	padding: ${theme.spacing.sm};
+	margin: 0 ${theme.spacing.sm};
 	font-size: 24px;
 	cursor: pointer;
 	border-radius: 50%;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	box-shadow: ${theme.shadows.light};
+	transition: background-color ${theme.transitions.fast}, color ${theme.transitions.fast};
+
 	&:hover {
 		background-color: ${(props) => (props.active ? theme.colors.primary : "#A5001A")};
 		color: ${theme.colors.white};
+	}
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+		padding: ${theme.spacing.xs};
+	}
+
+	i {
+		margin: 0;
 	}
 `;
 

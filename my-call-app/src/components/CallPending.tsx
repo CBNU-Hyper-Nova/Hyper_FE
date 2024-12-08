@@ -3,15 +3,17 @@ import React, { useEffect } from "react";
 import { useCallStore } from "../store/callStore";
 import styled from "styled-components";
 import { theme } from "../theme";
-
-const Container = styled.div`
-	text-align: center;
-	margin-top: 50px;
-`;
+import Container from "./common/Container";
+import Card from "./common/Card";
 
 const Message = styled.h2`
 	font-family: ${theme.fonts.secondary};
 	color: ${theme.colors.text};
+	font-size: 24px;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+	}
 `;
 
 const CallPending: React.FC = () => {
@@ -25,17 +27,21 @@ const CallPending: React.FC = () => {
 
 			// 실제 구현 시
 			/*
-      // 시그널링 서버를 통해 상대방에게 통화 요청을 보내고,
-      // 상대방이 수락하면 isInCall을 true로 설정합니다.
+        // 시그널링 서버를 통해 상대방에게 통화 요청을 보내고,
+        // 상대방이 수락하면 isInCall을 true로 설정합니다.
       */
 		}, 1000);
 
 		return () => clearTimeout(timer);
 	}, []);
 
+	if (!isCallPending) return null;
+
 	return (
 		<Container>
-			<Message>통화 대기 중...</Message>
+			<Card>
+				<Message>통화 대기 중...</Message>
+			</Card>
 		</Container>
 	);
 };

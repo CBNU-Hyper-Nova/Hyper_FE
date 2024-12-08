@@ -2,21 +2,37 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useCallStore } from "../store/callStore";
 import DetectedSentence from "./DetectedSentence";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { theme } from "../theme";
 import { Holistic } from "@mediapipe/holistic";
 import { Camera } from "@mediapipe/camera_utils";
+import { useSignaling } from "../hooks/useSignaling";
+import ToggleButton from "./ToggleButton";
 
-// 스타일 컴포넌트
+const fadeInUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
 const VideoContainer = styled.div`
 	position: relative;
 	width: 80%;
 	max-width: 800px;
-	margin: 20px auto;
-	border-radius: 15px;
+	margin: ${theme.spacing.md} auto;
+	border-radius: ${theme.radius.lg};
 	overflow: hidden;
 	background-color: black;
-	box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+	box-shadow: ${theme.shadows.heavy};
+
+	@media (max-width: ${theme.breakpoints.tablet}) {
+		width: 95%;
+	}
 `;
 
 const VideoElement = styled.video`
@@ -39,33 +55,39 @@ const PlaceholderImage = styled.div`
 const SmallVideo = styled.video`
 	position: absolute;
 	width: 25%;
-	bottom: 20px;
-	right: 20px;
+	bottom: ${theme.spacing.sm};
+	right: ${theme.spacing.sm};
 	border: 2px solid ${theme.colors.white};
-	border-radius: 10px;
-	box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+	border-radius: ${theme.radius.sm};
+	box-shadow: ${theme.shadows.light};
 	background-color: black;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		width: 30%;
+	}
 `;
 
 const Controls = styled.div`
 	position: absolute;
-	bottom: 20px;
-	left: 20px;
+	bottom: ${theme.spacing.sm};
+	left: ${theme.spacing.sm};
 	display: flex;
+	gap: ${theme.spacing.sm};
 `;
 
 const ControlButton = styled.button`
 	background-color: rgba(0, 0, 0, 0.5);
 	border: none;
 	color: ${theme.colors.white};
-	padding: 15px;
-	margin-right: 10px;
+	padding: ${theme.spacing.sm};
+	margin-right: ${theme.spacing.sm};
 	font-size: 24px;
 	cursor: pointer;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	transition: background-color ${theme.transitions.fast};
 
 	&:hover {
 		background-color: rgba(0, 0, 0, 0.7);
@@ -74,16 +96,34 @@ const ControlButton = styled.button`
 	i {
 		margin: 0;
 	}
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+		padding: ${theme.spacing.xs};
+	}
 `;
 
 const EndCallButton = styled(ControlButton)`
 	background-color: ${theme.colors.danger};
+
 	&:hover {
 		background-color: #a5001a;
 	}
 `;
 
+const Header = styled.div`
+	background-color: ${theme.colors.primary};
+	color: ${theme.colors.white};
+	padding: ${theme.spacing.sm};
+	text-align: center;
+	font-size: 20px;
+	border-top-left-radius: ${theme.radius.lg};
+	border-top-right-radius: ${theme.radius.lg};
+`;
+
 const VideoCall: React.FC = () => {
+	useSignaling(); // 시그널링 초기화
+
 	const localVideoRef = useRef<HTMLVideoElement>(null);
 	const remoteVideoRef = useRef<HTMLVideoElement>(null);
 	const {
@@ -95,6 +135,10 @@ const VideoCall: React.FC = () => {
 		remoteStream,
 		setLocalStream,
 		setRemoteStream,
+		callType,
+		peerConnection,
+		selectedFriend,
+		signalingId,
 	} = useCallStore();
 
 	const holisticRef = useRef<Holistic | null>(null);
@@ -232,68 +276,78 @@ const VideoCall: React.FC = () => {
 	};
 
 	useEffect(() => {
-		// 마이크 On/Off 처리
-		if (localStream) {
-			localStream.getAudioTracks().forEach((track) => {
-				track.enabled = micOn;
-			});
+		// 통화 유형에 따른 미디어 스트림 설정
+		const getMedia = async () => {
+			try {
+				const constraints: MediaStreamConstraints = {
+					video: callType === "video" ? cameraOn : false,
+					audio: micOn,
+				};
+				const stream = await navigator.mediaDevices.getUserMedia(constraints);
+				setLocalStream(stream);
+				if (localVideoRef.current && callType === "video") {
+					localVideoRef.current.srcObject = stream;
+				}
+
+				// PeerConnection에 로컬 스트림 추가
+				if (peerConnection && stream) {
+					stream.getTracks().forEach((track) => {
+						peerConnection.addTrack(track, stream);
+					});
+				}
+			} catch (error) {
+				console.error("미디어 스트림 가져오기 오류:", error);
+			}
+		};
+
+		if (useCallStore.getState().isInCall) {
+			getMedia();
 		}
-	}, [micOn, localStream]);
+
+		// Clean up
+		return () => {
+			if (localStream) {
+				localStream.getTracks().forEach((track) => track.stop());
+			}
+		};
+	}, [callType, cameraOn, micOn, setLocalStream, peerConnection]);
 
 	useEffect(() => {
-		// 카메라 On/Off 처리
-		if (localStream) {
+		// 카메라 On/Off 처리 (비디오 통화인 경우에만 작동)
+		if (callType === "video" && localStream) {
 			localStream.getVideoTracks().forEach((track) => {
 				track.enabled = cameraOn;
 			});
 		}
-		// 작은 화면이 카메라 On/Off에 따라 나타나도록 설정
-		if (cameraOn) {
-			if (localVideoRef.current) {
-				localVideoRef.current.srcObject = localStream;
-			}
-		} else {
-			if (localVideoRef.current) {
-				localVideoRef.current.srcObject = null;
-			}
-		}
-	}, [cameraOn, localStream]);
+	}, [cameraOn, localStream, callType]);
 
 	useEffect(() => {
 		// 원격 스트림 설정
-		// TODO: 실제 구현 시 주석 해제
-		/*
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
-    */
-		// 모킹용 코드 (테스트를 위해 샘플 비디오 사용)
-		if (remoteVideoRef.current) {
-			remoteVideoRef.current.src = "/sample-video.mp4";
+		if (remoteVideoRef.current && remoteStream) {
+			remoteVideoRef.current.srcObject = remoteStream;
 		}
 	}, [remoteStream]);
 
 	return (
 		<div>
+			{useCallStore.getState().isInCall && selectedFriend && (
+				<Header>
+					{callType === "audio" ? "🎤 오디오 통화 중" : "📹 영상 통화 중"} - {selectedFriend.name}
+				</Header>
+			)}
 			<VideoContainer>
 				{/* 상대방 영상 */}
 				<VideoElement ref={remoteVideoRef} autoPlay playsInline muted />
 				{/* 상대방 카메라가 꺼졌을 때 프로필 이미지 표시 */}
 				{!remoteStream && <PlaceholderImage />}
-				{/* 자신의 영상 (작은 화면) */}
-				{cameraOn && <SmallVideo ref={localVideoRef} autoPlay playsInline muted />}
+				{/* 자신의 영상 (비디오 통화인 경우에만 표시) */}
+				{callType === "video" && cameraOn && (
+					<SmallVideo ref={localVideoRef} autoPlay playsInline muted />
+				)}
 				{/* 컨트롤 버튼들 */}
 				<Controls>
-					<ControlButton onClick={() => useCallStore.getState().toggleCamera()}>
-						{cameraOn ? <i className='fas fa-video' /> : <i className='fas fa-video-slash' />}
-					</ControlButton>
-					<ControlButton onClick={() => useCallStore.getState().toggleMic()}>
-						{micOn ? (
-							<i className='fas fa-microphone' />
-						) : (
-							<i className='fas fa-microphone-slash' />
-						)}
-					</ControlButton>
+					<ToggleButton type='camera' />
+					<ToggleButton type='mic' />
 					<EndCallButton onClick={endCall}>
 						<i className='fas fa-phone-slash' />
 					</EndCallButton>

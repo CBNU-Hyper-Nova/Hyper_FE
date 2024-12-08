@@ -17,20 +17,26 @@ const fadeInUp = keyframes`
 
 const SentenceContainer = styled.div`
 	text-align: center;
-	margin-top: 20px;
+	margin-top: ${theme.spacing.md};
 `;
 
 const SentenceText = styled.p`
 	display: inline-block;
-	background: linear-gradient(45deg, ${theme.colors.secondary}, ${theme.colors.accent});
+	background: linear-gradient(135deg, ${theme.colors.secondary}, ${theme.colors.accent});
 	color: ${theme.colors.white};
-	padding: 20px 30px;
-	border-radius: 50px;
+	padding: ${theme.spacing.sm} ${theme.spacing.md};
+	border-radius: ${theme.radius.round};
 	font-size: 28px;
 	font-weight: bold;
 	font-family: ${theme.fonts.secondary};
 	animation: ${fadeInUp} 0.5s ease-in-out;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+	box-shadow: ${theme.shadows.light};
+	transition: opacity ${theme.transitions.fast};
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+		padding: ${theme.spacing.xs} ${theme.spacing.sm};
+	}
 `;
 
 const DetectedSentence: React.FC = () => {

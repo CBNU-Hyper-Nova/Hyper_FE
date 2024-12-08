@@ -3,6 +3,7 @@ import React from "react";
 import { useCallStore } from "../store/callStore";
 import styled, { keyframes } from "styled-components";
 import { theme } from "../theme";
+import BaseButton from "./common/BaseButton";
 
 const fadeIn = keyframes`
   from {
@@ -19,53 +20,63 @@ const ModalOverlay = styled.div`
 	left: 0;
 	width: 100%;
 	height: 100%;
-	background-color: rgba(0, 0, 0, 0.5);
+	background-color: ${theme.colors.modalOverlay};
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	animation: ${fadeIn} 0.3s ease-in-out;
+	z-index: 1000;
 `;
 
 const ModalContent = styled.div`
 	background-color: ${theme.colors.white};
-	padding: 40px;
-	border-radius: 15px;
+	padding: ${theme.spacing.lg};
+	border-radius: ${theme.radius.lg};
 	text-align: center;
-	max-width: 90%;
-	box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+	max-width: 400px;
+	width: 90%;
+	box-shadow: ${theme.shadows.heavy};
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		padding: ${theme.spacing.md};
+	}
 `;
 
 const Title = styled.h2`
 	font-family: ${theme.fonts.secondary};
-	margin-bottom: 30px;
+	margin-bottom: ${theme.spacing.md};
 	font-size: 24px;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+	}
 `;
 
 const ButtonGroup = styled.div`
 	display: flex;
 	justify-content: center;
+	gap: ${theme.spacing.sm};
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		flex-direction: column;
+		gap: ${theme.spacing.xs};
+	}
 `;
 
-const Button = styled.button<{ accept?: boolean }>`
+const Button = styled(BaseButton)<{ accept?: boolean }>`
 	background-color: ${(props) => (props.accept ? theme.colors.primary : theme.colors.danger)};
-	border: none;
-	color: ${theme.colors.white};
-	padding: 15px 30px;
-	margin: 0 10px;
-	font-size: 18px;
-	font-family: ${theme.fonts.primary};
-	cursor: pointer;
-	border-radius: 50px;
-	min-width: 150px;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-	transition: background-color 0.2s ease-in-out;
+	width: 150px;
 
 	&:hover {
 		background-color: ${(props) => (props.accept ? "#357ABD" : "#A5001A")};
 	}
 
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		width: 100%;
+	}
+
 	i {
-		margin-right: 8px;
+		margin-right: ${theme.spacing.xs};
 		font-size: 20px;
 	}
 `;
@@ -80,10 +91,10 @@ const IncomingCallModal: React.FC = () => {
 			<ModalContent>
 				<Title>📲 새로운 영상 통화가 도착했습니다</Title>
 				<ButtonGroup>
-					<Button accept onClick={receiveCall}>
+					<Button accept onClick={receiveCall} variant='primary'>
 						<i className='fas fa-phone'></i> 수락
 					</Button>
-					<Button onClick={rejectCall}>
+					<Button onClick={rejectCall} variant='danger'>
 						<i className='fas fa-phone-slash'></i> 거절
 					</Button>
 				</ButtonGroup>

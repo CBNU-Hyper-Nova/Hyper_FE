@@ -3,47 +3,65 @@ import React, { useState } from "react";
 import { useAuthStore } from "../store/authStore";
 import styled from "styled-components";
 import { theme } from "../theme";
+import BaseButton from "./common/BaseButton";
+import Container from "./common/Container";
 
-const Container = styled.div`
+const FormContainer = styled.div`
 	background-color: ${theme.colors.white};
-	padding: 40px;
-	border-radius: 15px;
+	padding: ${theme.spacing.lg};
+	border-radius: ${theme.radius.lg};
 	max-width: 400px;
-	margin: 100px auto;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+	margin: ${theme.spacing.xl} auto;
+	margin-top: 175px;
+	box-shadow: ${theme.shadows.medium};
 	text-align: center;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		padding: ${theme.spacing.md};
+		margin: ${theme.spacing.lg} auto;
+	}
 `;
 
 const Title = styled.h2`
 	font-family: ${theme.fonts.secondary};
-	margin-bottom: 30px;
+	margin-bottom: ${theme.spacing.md};
+	font-size: 24px;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 20px;
+	}
 `;
 
 const Input = styled.input`
 	width: 80%;
-	padding: 12px;
-	margin: 10px 0;
+	padding: ${theme.spacing.sm};
+	margin: ${theme.spacing.sm} 0;
 	border: 1px solid ${theme.colors.primary};
-	border-radius: 5px;
+	border-radius: ${theme.radius.sm};
 	font-size: 16px;
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		width: 100%;
+		padding: ${theme.spacing.xs};
+		font-size: 14px;
+	}
 `;
 
-const Button = styled.button`
-	background-color: ${theme.colors.accent};
-	color: ${theme.colors.white};
-	border: none;
-	padding: 12px 40px;
+const Button = styled(BaseButton)`
+	width: 100%;
+	margin-top: ${theme.spacing.sm};
+	padding: ${theme.spacing.sm};
 	font-size: 18px;
-	border-radius: 25px;
-	cursor: pointer;
-	margin-top: 20px;
-	&:hover {
-		background-color: #7a0fc0;
+	border-radius: ${theme.radius.round};
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 16px;
+		padding: ${theme.spacing.xs};
 	}
 `;
 
 const ToggleLink = styled.p`
-	margin-top: 20px;
+	margin-top: ${theme.spacing.sm};
 	color: ${theme.colors.text};
 	cursor: pointer;
 	&:hover {
@@ -59,13 +77,14 @@ const SignUp: React.FC<SignUpProps> = ({ toggleAuth }) => {
 	const { signUp } = useAuthStore();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
+
 	// 회원가입 함수
 	const handleSignUp = async () => {
 		await signUp(username, password);
 	};
 
 	return (
-		<Container>
+		<FormContainer>
 			<Title>회원가입</Title>
 			<Input
 				type='text'
@@ -79,9 +98,11 @@ const SignUp: React.FC<SignUpProps> = ({ toggleAuth }) => {
 				value={password}
 				onChange={(e) => setPassword(e.target.value)}
 			/>
-			<Button onClick={handleSignUp}>회원가입</Button>
+			<Button onClick={handleSignUp} variant='secondary'>
+				회원가입
+			</Button>
 			<ToggleLink onClick={toggleAuth}>이미 계정이 있으신가요? 로그인</ToggleLink>
-		</Container>
+		</FormContainer>
 	);
 };
 

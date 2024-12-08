@@ -3,41 +3,39 @@ import React from "react";
 import { useCallStore } from "../store/callStore";
 import styled from "styled-components";
 import { theme } from "../theme";
+import BaseButton from "./common/BaseButton";
 
-const Button = styled.button`
+const StyledButton = styled(BaseButton)`
 	background: linear-gradient(45deg, ${theme.colors.primary}, ${theme.colors.accent});
-	border: none;
-	color: ${theme.colors.white};
-	padding: 15px 40px;
+	padding: ${theme.spacing.sm} ${theme.spacing.lg};
 	font-size: 18px;
-	font-weight: bold;
-	font-family: ${theme.fonts.primary};
-	cursor: pointer;
-	border-radius: 50px;
-	margin: 20px;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-	transition: transform 0.2s ease-in-out;
-	display: inline-flex;
-	align-items: center;
+	border-radius: ${theme.radius.round};
+	box-shadow: ${theme.shadows.medium};
+	transition: transform ${theme.transitions.fast};
 
 	&:hover {
 		transform: scale(1.05);
 	}
 
 	i {
-		margin-right: 10px;
-		font-size: 24px;
+		margin-right: ${theme.spacing.xs};
+		font-size: 20px;
+	}
+
+	@media (max-width: ${theme.breakpoints.mobile}) {
+		font-size: 16px;
+		padding: ${theme.spacing.xs} ${theme.spacing.md};
 	}
 `;
 
-const CallButton: React.FC = () => {
+const CallButtonComponent: React.FC = () => {
 	const { startCall } = useCallStore();
 
 	return (
-		<Button onClick={startCall}>
+		<StyledButton onClick={startCall} variant='primary'>
 			<i className='fas fa-video'></i> 통화 걸기
-		</Button>
+		</StyledButton>
 	);
 };
 
-export default CallButton;
+export default CallButtonComponent;
