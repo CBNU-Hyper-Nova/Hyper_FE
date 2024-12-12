@@ -7,16 +7,19 @@ import IncomingCallModal from "./components/IncomingCallModal";
 import VideoCall from "./components/VideoCall";
 import Login from "./components/Login";
 import SignUp from "./components/SignUp";
-import CallPending from "./components/CallPending"; // 새로운 컴포넌트 임포트
+import CallPending from "./components/CallPending";
 import styled from "styled-components";
 import GlobalStyle from "./globalStyles";
 import { theme } from "./theme";
 import { useSignaling } from "./hooks/useSignaling";
+import CallButton from "./components/CallButton";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 const AppContainer = styled.div`
 	font-family: ${theme.fonts.primary};
 	background: ${theme.colors.background};
 	min-height: 100vh;
+	width: 100vw;
 	display: flex;
 	flex-direction: column;
 	align-items: center; /* 중앙 정렬 */
@@ -32,8 +35,7 @@ const Header = styled.header`
 	text-align: center;
 	border-radius: ${theme.radius.md};
 	box-shadow: ${theme.shadows.medium};
-	width: 100%;
-	max-width: 800px;
+	width: 97%;
 	margin-bottom: ${theme.spacing.lg};
 	position: relative;
 
@@ -67,32 +69,35 @@ const Header = styled.header`
 
 const MainContent = styled.main`
 	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	text-align: center;
 	padding: ${theme.spacing.xl} ${theme.spacing.md};
 	width: 100%;
-	max-width: 800px;
+	height: 100%; /* 부모 컨테이너의 높이를 채우도록 설정 */
 
 	@media (max-width: ${theme.breakpoints.mobile}) {
 		padding: ${theme.spacing.lg} ${theme.spacing.sm};
+		width: 90%; /* 작은 화면에서는 더 좁게 설정 */
 	}
 `;
 
 const App: React.FC = () => {
-	useSignaling(); // 시그널링 초기화
+	const { user } = useAuthStore();
+	const { sendMessage } = useSignaling(user?.signalingId || "");
 
-	const { isInCall, isReceiving, isCalling, isCallPending } = useCallStore();
+	const { isInCall, isReceiving, isCalling, isPending } = useCallStore();
 	const { isAuthenticated, logout } = useAuthStore();
 	const [isSignUp, setIsSignUp] = useState(false);
 
 	useEffect(() => {
-		// 수신 모킹 (백엔드에서 실제 구현 시 삭제)
-		// const timer = setTimeout(() => {
-		// 	if (!isInCall && !isCalling) {
-		// 		useCallStore.setState({ isReceiving: true });
-		// 	}
-		// }, 5000);
-		// return () => clearTimeout(timer);
-	}, [isInCall, isCalling]);
+		// 필요한 초기화 작업은 여기서
+		if (user?.signalingId) {
+			// ...
+		}
+	}, [user]);
 
 	if (!isAuthenticated) {
 		return (
@@ -100,7 +105,7 @@ const App: React.FC = () => {
 				<GlobalStyle />
 				<AppContainer>
 					<Header>
-						<h1>🌐 영상 통화 앱</h1>
+						<h1>Handy</h1>
 					</Header>
 					<MainContent>
 						{isSignUp ? (
@@ -119,14 +124,14 @@ const App: React.FC = () => {
 			<GlobalStyle />
 			<AppContainer>
 				<Header>
-					<h1>🌐 영상 통화 앱</h1>
-					<button onClick={logout}>로그아웃</button>
+					<h1>Handy</h1>
+					<button onClick={logout}>LogOut</button>
 				</Header>
 				<MainContent>
-					{isCallPending && <CallPending />}
+					{isPending && <CallPending />}
 					{isReceiving && <IncomingCallModal />}
 					{isInCall && <VideoCall />}
-					{!isInCall && !isReceiving && !isCalling && !isCallPending && <FriendsList />}
+					{!isPending && !isInCall && !isReceiving && !isCalling && <FriendsList />}
 				</MainContent>
 			</AppContainer>
 		</>

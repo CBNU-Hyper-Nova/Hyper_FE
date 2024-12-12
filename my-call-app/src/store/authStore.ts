@@ -1,64 +1,48 @@
 import { create } from "zustand";
 
+interface User {
+	username: string;
+	signalingId: string;
+}
+
 interface AuthState {
 	isAuthenticated: boolean;
-	token: string | null;
+	user: User | null;
 	login: (username: string, password: string) => Promise<void>;
-	signup: (username: string, password: string) => Promise<void>;
 	logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
 	isAuthenticated: false,
-	token: null,
-	login: async (username, password) => {
+	user: null,
+	login: async (username: string, password: string) => {
 		try {
-			const response = await fetch("http://localhost:8081/user/login", {
+			const response = await fetch("http://localhost:8678/user/login", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
+				credentials: "include",
 				body: JSON.stringify({ username, password }),
 			});
 
-			if (response.ok) {
-				const data = await response.json();
-				set({ isAuthenticated: true, token: data.token });
-				localStorage.setItem("token", data.token);
-			} else {
-				const errorData = await response.json();
-				throw new Error(errorData.error || "로그인에 실패했습니다.");
+			if (!response.ok) {
+				throw new Error("로그인 실패");
 			}
+
+			const data = await response.json();
+
+			set({
+				isAuthenticated: true,
+				user: {
+					username: data.username,
+					signalingId: data.signalingId || username,
+				},
+			});
 		} catch (error) {
 			console.error("로그인 오류:", error);
 			throw error;
 		}
 	},
-	signup: async (username, password) => {
-		try {
-			const response = await fetch("http://localhost:8081/user/signup", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ username, password }),
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				set({ isAuthenticated: true, token: data.token });
-				localStorage.setItem("token", data.token);
-			} else {
-				const errorData = await response.json();
-				throw new Error(errorData.error || "회원가입에 실패했습니다.");
-			}
-		} catch (error) {
-			console.error("회원가입 오류:", error);
-			throw error;
-		}
-	},
-	logout: () => {
-		set({ isAuthenticated: false, token: null });
-		localStorage.removeItem("token");
-	},
+	logout: () => set({ isAuthenticated: false, user: null }),
 }));

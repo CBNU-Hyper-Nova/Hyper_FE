@@ -1,196 +1,200 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { Client } from "@stomp/stompjs";
+import { useAuthStore } from "../store/authStore";
 import { useCallStore } from "../store/callStore";
+import { useNavigate } from "react-router-dom";
 
-const SIGNALING_SERVER_URL = "ws://localhost:8081/ws"; // Spring Boot 백엔드 WebSocket 엔드포인트
+interface SignalingProps {
+	onCallRequest?: (data: any) => void;
+	onCallAccept?: (data: any) => void;
+	onCallReject?: (data: any) => void;
+}
 
-export const useSignaling = () => {
-	const {
-		signalingId,
-		setSignalingId,
-		setPeerConnection,
-		peerConnection,
-		setRemoteStream,
-		endCall,
-		receiveCall,
-	} = useCallStore();
+export const useSignaling = (mySignalingId: string, callbacks: SignalingProps = {}) => {
+	const client = useRef<Client | null>(null);
+	const isConnecting = useRef<boolean>(false);
+	const { setIsReceiving, setCallerInfo, setIsPending, setIsInCall, setIsCalling, setLocalStream } =
+		useCallStore();
+	const navigate = useNavigate();
 
-	useEffect(() => {
-		// WebSocket 연결 생성
-		const ws = new WebSocket(SIGNALING_SERVER_URL);
+	const handleMessage = useCallback(
+		async (data: any) => {
+			console.log("메시지 수신 raw data:", data);
 
-		ws.onopen = () => {
-			console.log("시그널링 서버에 연결됨");
-			// 필요 시 인증 토큰 전송
-			// ws.send(JSON.stringify({ type: "authenticate", token: "YOUR_AUTH_TOKEN" }));
-		};
-
-		ws.onmessage = async (message) => {
-			try {
-				const data = JSON.parse(message.data);
-				const { type, payload, from } = data;
-
-				console.log("수신된 메시지:", data);
-
-				switch (type) {
-					case "id":
-						setSignalingId(payload.id);
-						break;
-					case "offer":
-						await handleReceiveOffer(payload, from, ws);
-						break;
-					case "answer":
-						await handleReceiveAnswer(payload);
-						break;
-					case "ice-candidate":
-						await handleReceiveICE(payload);
-						break;
-					case "call-reject":
-						alert("상대방이 통화를 거절했습니다.");
-						endCall();
-						break;
-					default:
-						console.warn("알 수 없는 메시지 타입:", type);
-				}
-			} catch (error) {
-				console.error("메시지 처리 중 오류:", error);
+			if (!data || !data.type) {
+				console.error("잘못된 메시지 형식:", data);
+				return;
 			}
-		};
 
-		ws.onclose = () => {
-			console.log("시그널링 서버 연결 해제됨");
-			endCall();
-		};
+			switch (data.type) {
+				case "call-request":
+					console.log("통화 요청 수신됨:", data);
+					setIsReceiving(true);
+					setCallerInfo({
+						id: data.from,
+						type: data.payload.type,
+					});
+					break;
+				case "call-accept":
+					console.log("통화 수락됨:", data);
+					setIsPending(false);
+					setIsInCall(true);
+					setIsCalling(false);
 
-		const handleReceiveOffer = async (offer: any, from: string, ws: WebSocket) => {
-			const pc = createPeerConnection(ws, from);
-			setPeerConnection(pc);
-
-			try {
-				await pc.setRemoteDescription(new RTCSessionDescription(offer));
-				const answer = await pc.createAnswer();
-				await pc.setLocalDescription(answer);
-
-				// Answer 전송
-				ws.send(
-					JSON.stringify({
-						type: "answer",
-						payload: answer,
-						to: from,
-						from: signalingId,
-					})
-				);
-			} catch (error) {
-				console.error("Offer 처리 중 오류:", error);
+					try {
+						const stream = await navigator.mediaDevices.getUserMedia({
+							video: true,
+							audio: true,
+						});
+						setLocalStream(stream);
+						navigate("/video-call");
+					} catch (error) {
+						console.error("미디어 스트림 오류:", error);
+						alert("카메라와 마이크 권한이 필요합니다.");
+					}
+					break;
+				case "call-reject":
+					console.log("통화 거절됨:", data);
+					// 전화 건 사람이 받는 경우
+					setIsPending(false);
+					setIsCalling(false);
+					setIsInCall(false);
+					navigate("/friends");
+					break;
+				default:
+					console.log("처리되지 않은 메시지 타입:", data.type);
 			}
-		};
+		},
+		[setIsReceiving, setIsPending, setIsInCall, setIsCalling, setCallerInfo, navigate]
+	);
 
-		const handleReceiveAnswer = async (answer: any) => {
-			try {
-				if (peerConnection) {
-					await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-				}
-			} catch (error) {
-				console.error("Answer 처리 중 오류:", error);
-			}
-		};
+	const createStompClient = useCallback(
+		(myId: string) => {
+			if (!myId || isConnecting.current) return null;
 
-		const handleReceiveICE = async (candidate: any) => {
-			try {
-				if (peerConnection) {
-					await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-				}
-			} catch (error) {
-				console.error("ICE 후보 추가 중 오류:", error);
-			}
-		};
-
-		const createPeerConnection = (ws: WebSocket, targetId: string): RTCPeerConnection => {
-			const configuration: RTCConfiguration = {
-				iceServers: [
-					{ urls: "stun:stun.l.google.com:19302" },
-					// 필요 시 TURN 서버 추가
-				],
-			};
-
-			const pc = new RTCPeerConnection(configuration);
-
-			pc.onicecandidate = (event) => {
-				if (event.candidate) {
-					ws.send(
-						JSON.stringify({
-							type: "ice-candidate",
-							payload: event.candidate,
-							to: targetId,
-							from: signalingId,
-						})
-					);
-				}
-			};
-
-			pc.ontrack = (event) => {
-				const remoteStream = new MediaStream();
-				remoteStream.addTrack(event.track);
-				setRemoteStream(remoteStream);
-			};
-
-			return pc;
-		};
-
-		return () => {
-			ws.close();
-		};
-	}, [signalingId, setSignalingId, setPeerConnection, peerConnection, setRemoteStream, endCall]);
-
-	// Offer 생성 및 전송 함수
-	const initiateCall = async (type: "audio" | "video") => {
-		if (!signalingId) {
-			alert("시그널링 서버에 연결되지 않았습니다.");
-			return;
-		}
-
-		const { selectedFriend } = useCallStore.getState();
-
-		if (!selectedFriend || !selectedFriend.signalingId) {
-			alert("통화를 시작할 친구를 선택해주세요.");
-			return;
-		}
-
-		const constraints: MediaStreamConstraints = {
-			video: type === "video",
-			audio: true,
-		};
-
-		try {
-			const stream = await navigator.mediaDevices.getUserMedia(constraints);
-			useCallStore.getState().setLocalStream(stream);
-
-			const pc = createPeerConnection(ws, selectedFriend.signalingId);
-			setPeerConnection(pc);
-
-			// 로컬 스트림의 트랙을 PeerConnection에 추가
-			stream.getTracks().forEach((track) => {
-				pc.addTrack(track, stream);
+			const stompClient = new Client({
+				brokerURL: "ws://localhost:8678/ws",
+				connectHeaders: {
+					login: myId,
+				},
+				debug: function (str) {
+					console.log("STOMP:", str);
+				},
+				reconnectDelay: 5000,
+				heartbeatIncoming: 4000,
+				heartbeatOutgoing: 4000,
 			});
 
-			// Offer 생성
-			const offer = await pc.createOffer();
-			await pc.setLocalDescription(offer);
+			stompClient.onConnect = () => {
+				console.log("STOMP 연결 성공. ID:", myId);
+				isConnecting.current = false;
 
-			// Offer 전송
-			ws.send(
-				JSON.stringify({
-					type: "offer",
-					payload: offer,
-					to: selectedFriend.signalingId,
-					from: signalingId,
-				})
-			);
+				stompClient.subscribe(
+					`/user/${myId}/queue/messages`,
+					(message) => {
+						try {
+							console.log("원본 STOMP 메시지:", message);
+							const data = JSON.parse(message.body);
+							console.log("파싱된 메시지 데이터:", data);
+							handleMessage(data);
+						} catch (error) {
+							console.error("메시지 처리 오류:", error);
+						}
+					},
+					{
+						id: "sub-0",
+					}
+				);
 
-			useCallStore.getState().setIsCalling(true);
-		} catch (error) {
-			console.error("통화 시작 중 오류:", error);
+				console.log("구독 완료:", `/user/${myId}/queue/messages`);
+			};
+
+			stompClient.onStompError = (frame) => {
+				console.error("STOMP 에러:", frame);
+			};
+
+			return stompClient;
+		},
+		[handleMessage]
+	);
+
+	const signalSend = useCallback(
+		(type: string, payload: any) => {
+			console.log("signalSend 호출됨:", type, payload);
+
+			if (type === "call-request") {
+				setIsPending(true);
+			}
+
+			if (!client.current?.connected) {
+				console.error("STOMP 클라이언트가 연결되지 않음");
+				return;
+			}
+
+			try {
+				const message = {
+					type,
+					from: mySignalingId,
+					to: payload.to,
+					payload,
+				};
+
+				console.log("전송할 메시지:", message);
+
+				client.current.publish({
+					destination: `/app/message`,
+					headers: {
+						"content-type": "application/json",
+					},
+					body: JSON.stringify(message),
+				});
+
+				console.log("메시지 전송 완료");
+			} catch (error) {
+				console.error("메시지 전송 오류:", error);
+				if (type === "call-request") {
+					setIsPending(false);
+				}
+			}
+		},
+		[mySignalingId, setIsPending]
+	);
+
+	useEffect(() => {
+		if (!mySignalingId) return;
+
+		if (client.current) {
+			client.current.deactivate();
+			client.current = null;
 		}
-	};
 
-	return { initiateCall };
+		const newClient = createStompClient(mySignalingId);
+		if (newClient) {
+			client.current = newClient;
+			client.current.activate();
+		}
+
+		return () => {
+			if (client.current) {
+				client.current.deactivate();
+				client.current = null;
+			}
+			isConnecting.current = false;
+		};
+	}, [mySignalingId, createStompClient]);
+
+	return { sendMessage: signalSend };
 };
+async function handleReceivedOffer(offer: RTCSessionDescriptionInit, from: string, ws: WebSocket) {
+	console.log("Received offer:", offer);
+}
+
+async function handleReceivedAnswer(answer: RTCSessionDescriptionInit) {
+	console.log("Received answer:", answer);
+}
+
+async function handleReceivedCandidate(candidate: RTCIceCandidateInit) {
+	console.log("Received ICE candidate:", candidate);
+}
+
+export default useSignaling;

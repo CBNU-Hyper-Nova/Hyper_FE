@@ -7,6 +7,7 @@ const Card = styled.div`
 	border-radius: ${theme.radius.md};
 	padding: ${theme.spacing.md};
 	margin: ${theme.spacing.sm} 0;
+	margin-top: 25px;
 	box-shadow: ${theme.shadows.light};
 	transition: box-shadow ${theme.transitions.fast}, transform ${theme.transitions.fast};
 	display: flex;
