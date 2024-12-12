@@ -7,7 +7,14 @@ import { theme } from "../theme";
 import { Holistic } from "@mediapipe/holistic";
 import { Camera } from "@mediapipe/camera_utils";
 import { useSignaling } from "../hooks/useSignaling";
-import ToggleButton from "./ToggleButton";
+
+import {
+	FaMicrophone,
+	FaMicrophoneSlash,
+	FaVideo,
+	FaVideoSlash,
+	FaPhoneSlash,
+} from "react-icons/fa";
 
 const fadeInUp = keyframes`
   from {
@@ -22,50 +29,46 @@ const fadeInUp = keyframes`
 
 const VideoContainer = styled.div`
 	position: relative;
-	width: 100%;
-	height: 100vh;
+	width: 100vw;
+	height: auto;
+	background-color: black;
+	border-radius: 8px;
+	&:before {
+		content: "";
+		display: block;
+		padding-top: 56.25%; /* 16:9 비율 */
+	}
 `;
 
 const MainVideo = styled.video`
+	position: absolute;
+	top: 0;
+	left: 0;
 	width: 100%;
 	height: 100%;
+	border-radius: 8px;
 	object-fit: cover;
+	background-color: black;
 `;
 
 const LocalVideo = styled.video`
 	position: absolute;
 	bottom: 20px;
 	right: 20px;
-	width: 240px;
-	height: 180px;
+	width: 20%;
+	height: auto;
+	aspect-ratio: 16 / 9;
 	border-radius: 8px;
-	object-fit: cover;
 	border: 2px solid white;
-`;
-
-const PlaceholderImage = styled.div`
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-image: url("/default-profile.png");
-	background-size: cover;
-	background-position: center;
-`;
-
-const SmallVideo = styled.video`
-	position: absolute;
-	width: 25%;
-	bottom: ${theme.spacing.sm};
-	right: ${theme.spacing.sm};
-	border: 2px solid ${theme.colors.white};
-	border-radius: ${theme.radius.sm};
-	box-shadow: ${theme.shadows.light};
+	object-fit: cover;
 	background-color: black;
 
+	@media (max-width: ${theme.breakpoints.tablet}) {
+		width: 35%;
+	}
+
 	@media (max-width: ${theme.breakpoints.mobile}) {
-		width: 30%;
+		width: 35%;
 	}
 `;
 
@@ -82,7 +85,6 @@ const ControlButton = styled.button`
 	border: none;
 	color: ${theme.colors.white};
 	padding: ${theme.spacing.sm};
-	margin-right: ${theme.spacing.sm};
 	font-size: 24px;
 	cursor: pointer;
 	border-radius: 50%;
@@ -93,10 +95,6 @@ const ControlButton = styled.button`
 
 	&:hover {
 		background-color: rgba(0, 0, 0, 0.7);
-	}
-
-	i {
-		margin: 0;
 	}
 
 	@media (max-width: ${theme.breakpoints.mobile}) {
@@ -112,22 +110,10 @@ const EndCallButton = styled(ControlButton)`
 		background-color: #a5001a;
 	}
 `;
-
-const Header = styled.div`
-	background-color: ${theme.colors.primary};
-	color: ${theme.colors.white};
-	padding: ${theme.spacing.sm};
-	text-align: center;
-	font-size: 20px;
-	border-top-left-radius: ${theme.radius.lg};
-	border-top-right-radius: ${theme.radius.lg};
-`;
-
 const VideoCall: React.FC = () => {
-	useSignaling(); // 시그널링 초기화
-
 	const localVideoRef = useRef<HTMLVideoElement>(null);
 	const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
 	const {
 		endCall,
 		setDetectedSentence,
@@ -136,27 +122,21 @@ const VideoCall: React.FC = () => {
 		localStream,
 		remoteStream,
 		setLocalStream,
-		setRemoteStream,
 		callType,
-		peerConnection,
-		selectedFriend,
-		signalingId,
+		toggleCamera,
+		toggleMic,
 	} = useCallStore();
 
 	const holisticRef = useRef<Holistic | null>(null);
 	const cameraRef = useRef<Camera | null>(null);
-	const [frameNum, setFrameNum] = useState(0); // 프레임 번호 관리
+	const [frameNum, setFrameNum] = useState(0);
 
 	useEffect(() => {
-		// MediaPipe Holistic 모델 초기화
 		const initHolistic = async () => {
 			const { Holistic } = await import("@mediapipe/holistic");
-			const { drawConnectors, drawLandmarks } = await import("@mediapipe/drawing_utils");
 
 			holisticRef.current = new Holistic({
-				locateFile: (file) => {
-					return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
-				},
+				locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
 			});
 
 			holisticRef.current.setOptions({
@@ -184,30 +164,17 @@ const VideoCall: React.FC = () => {
 
 		initHolistic();
 
-		// Clean up
 		return () => {
-			if (holisticRef.current) {
-				holisticRef.current.close();
-			}
-			if (cameraRef.current) {
-				cameraRef.current.stop();
-			}
+			if (holisticRef.current) holisticRef.current.close();
+			if (cameraRef.current) cameraRef.current.stop();
 		};
 	}, []);
 
 	const onResults = (results: any) => {
-		// 키포인트 추출
 		const keypoints = extractKeypoints(results);
-		if (!keypoints) {
-			// 키포인트가 제대로 추출되지 않았을 경우
-			console.warn("키포인트를 추출하지 못했습니다.");
-			return;
-		}
-		// 타임스탬프 생성
+		if (!keypoints) return;
 		const timestamp = Date.now();
-		// 프레임 번호 증가
 		setFrameNum((prev) => prev + 1);
-		// 키포인트와 타임스탬프를 백엔드로 전송
 		sendKeypointsToBackend(frameNum, keypoints, timestamp);
 	};
 
@@ -219,27 +186,22 @@ const VideoCall: React.FC = () => {
 		const poseCount = 33;
 		const handCount = 21;
 
-		// 포즈 랜드마크 (33개)
 		const pose = Array.from({ length: poseCount }, (_, i) => {
 			const landmark = poseLandmarks[i];
 			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		// 왼손 랜드마크 (21개)
 		const leftHand = Array.from({ length: handCount }, (_, i) => {
 			const landmark = leftHandLandmarks[i];
 			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		// 오른손 랜드마크 (21개)
 		const rightHand = Array.from({ length: handCount }, (_, i) => {
 			const landmark = rightHandLandmarks[i];
 			return landmark ? [landmark.x, landmark.y, landmark.z] : [0, 0, 0];
 		});
 
-		// 키포인트를 하나의 배열로 결합 (75 x 3 = 225)
-		const keypoints = [...pose, ...leftHand, ...rightHand].flat(); // [x1, y1, z1, ..., x75, y75, z75]
-
+		const keypoints = [...pose, ...leftHand, ...rightHand].flat();
 		return keypoints;
 	};
 
@@ -254,45 +216,37 @@ const VideoCall: React.FC = () => {
 				return;
 			}
 
-			// const response = await fetch("http://localhost:5001/process-keypoints", {
-			// 	method: "POST",
-			// 	headers: {
-			// 		"Content-Type": "application/json",
-			// 	},
-			// 	body: JSON.stringify({ frame_num, keypoints, timestamp }),
-			// });
+			const response = await fetch("http://localhost:5001/process-keypoints", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ frame_num, keypoints, timestamp }),
+			});
 
 			if (response.ok) {
 				const data = await response.json();
-				// 받은 데이터: { timestamp: number, sentence: string }
-				if (data.sentence) {
-					setDetectedSentence(data.sentence);
-				}
+				if (data.sentence) setDetectedSentence(data.sentence);
 			} else {
 				const errorData = await response.json();
-				//console.error("백엔드 응답 오류:", errorData.error || response.statusText);
+				console.error("백엔드 응답 오류:", errorData.error || response.statusText);
 			}
 		} catch (error) {
-			//console.error("백엔드 전송 오류:", error);
+			console.error("백엔드 전송 오류:", error);
 		}
 	};
 
+	// 로컬 스트림 초기화 및 상태 관리
 	useEffect(() => {
-		// 로컬 비디오 스트림 설정
 		const setupLocalStream = async () => {
 			try {
-				const stream = await navigator.mediaDevices.getUserMedia({
-					video: true,
-					audio: true
-				});
-				
+				const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 				setLocalStream(stream);
-				
 				if (localVideoRef.current) {
 					localVideoRef.current.srcObject = stream;
 				}
 			} catch (error) {
-				console.error('로컬 스트림 설정 오류:', error);
+				console.error("로컬 스트림 설정 오류:", error);
 			}
 		};
 
@@ -302,44 +256,64 @@ const VideoCall: React.FC = () => {
 			localVideoRef.current.srcObject = localStream;
 		}
 
-		// 원격 비디오 스트림 설정
-		if (remoteVideoRef.current && remoteStream) {
-			remoteVideoRef.current.srcObject = remoteStream;
+		if (remoteVideoRef.current) {
+			if (remoteStream) {
+				remoteVideoRef.current.srcObject = remoteStream;
+			} else if (localStream) {
+				remoteVideoRef.current.srcObject = localStream;
+			}
 		}
 
-		// cleanup
 		return () => {
 			if (localStream) {
-				localStream.getTracks().forEach(track => track.stop());
+				localStream.getTracks().forEach((track) => track.stop());
 			}
 		};
-	}, [localStream, remoteStream]);
+	}, [localStream, remoteStream, setLocalStream]);
 
+	// 캠 상태 반영
 	useEffect(() => {
-		// 카메라 On/Off 처리 (비디오 통화인 경우에만 작동)
-		if (callType === "video" && localStream) {
+		if (localStream) {
 			localStream.getVideoTracks().forEach((track) => {
 				track.enabled = cameraOn;
 			});
 		}
-	}, [cameraOn, localStream, callType]);
+	}, [cameraOn, localStream]);
+
+	// 마이크 상태 반영
+	useEffect(() => {
+		if (localStream) {
+			localStream.getAudioTracks().forEach((track) => {
+				track.enabled = micOn;
+			});
+		}
+	}, [micOn, localStream]);
 
 	return (
 		<div>
-			{useCallStore.getState().isInCall && selectedFriend && (
-				<Header>
-					{callType === "audio" ? "🎤 오디오 통화 중" : "📹 영상 통화 중"} - {selectedFriend.name}
-				</Header>
-			)}
 			<VideoContainer>
-				<MainVideo ref={remoteVideoRef} autoPlay playsInline />
+				<MainVideo
+					ref={remoteVideoRef}
+					autoPlay
+					playsInline
+					muted={!remoteStream}
+					onLoadedMetadata={() => {
+						if (remoteVideoRef.current) {
+							remoteVideoRef.current.play().catch((err) => console.error("비디오 재생 오류:", err));
+						}
+					}}
+				/>
 				<LocalVideo ref={localVideoRef} autoPlay playsInline muted />
-				{/* 컨트롤 버튼들 */}
+
 				<Controls>
-					<ToggleButton type='camera' />
-					<ToggleButton type='mic' />
+					<ControlButton onClick={toggleCamera}>
+						{cameraOn ? <FaVideo /> : <FaVideoSlash />}
+					</ControlButton>
+					<ControlButton onClick={toggleMic}>
+						{micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+					</ControlButton>
 					<EndCallButton onClick={endCall}>
-						<i className='fas fa-phone-slash' />
+						<FaPhoneSlash />
 					</EndCallButton>
 				</Controls>
 			</VideoContainer>

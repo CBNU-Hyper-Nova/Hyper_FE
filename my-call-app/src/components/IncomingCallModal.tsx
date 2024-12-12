@@ -85,72 +85,72 @@ const Button = styled(BaseButton)<{ accept?: boolean }>`
 
 const IncomingCallModal = () => {
 	const { isReceiving, callerInfo, setIsReceiving, setIsInCall, setLocalStream } = useCallStore();
-	const user = useAuthStore(state => state.user);
+	const user = useAuthStore((state) => state.user);
 	const navigate = useNavigate();
-	const { sendMessage } = useSignaling(user?.signalingId || '');
+	const { sendMessage } = useSignaling(user?.signalingId || "");
 
-	console.log('IncomingCallModal render:', { isReceiving, callerInfo });
+	console.log("IncomingCallModal render:", { isReceiving, callerInfo });
 
 	if (!isReceiving || !callerInfo) return null;
 
 	const handleReject = () => {
-        if (callerInfo && user?.signalingId) {
-            try {
-                sendMessage('call-reject', {
-                    type: 'call-reject',
-                    from: user.signalingId,
-                    to: callerInfo.id,
-                    payload: {
-                        type: 'video'
-                    }
-                });
-                
-                // callStore.setState 대신 hook 사용
-                setIsReceiving(false);
-                setCallerInfo(null);
-                
-                navigate('/friends');
-            } catch (error) {
-                console.error('거절 처리 중 에러:', error);
-            }
-        }
-    };
+		if (callerInfo && user?.signalingId) {
+			try {
+				sendMessage("call-reject", {
+					type: "call-reject",
+					from: user.signalingId,
+					to: callerInfo.id,
+					payload: {
+						type: "video",
+					},
+				});
+
+				// callStore.setState 대신 hook 사용
+				setIsReceiving(false);
+				setCallerInfo(null);
+
+				navigate("/friends");
+			} catch (error) {
+				console.error("거절 처리 중 에러:", error);
+			}
+		}
+	};
 
 	const handleAccept = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
-                audio: true 
-            });
-            
-            setLocalStream(stream);
-            
-            if (user?.signalingId && callerInfo) {
-                sendMessage('call-accept', {
-                    type: 'call-accept',  // type 필드 추가
-                    to: callerInfo.id,
-                    payload: {            // payload 구조 맞추기
-                        type: 'video'
-                    }
-                });
-            }
-            
-            setIsReceiving(false);
-            setIsInCall(true);
-            navigate('/video-call');
-        } catch (error) {
-            console.error('handleAccept 오류:', error);
-            alert('통화 연결에 실패했습니다: ' + error.message);
-        }
-    };
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: true,
+				audio: true,
+			});
 
-    if (!callerInfo) return null;
+			setLocalStream(stream);
 
+			if (user?.signalingId && callerInfo) {
+				sendMessage("call-accept", {
+					type: "call-accept", // type 필드 추가
+					to: callerInfo.id,
+					payload: {
+						// payload 구조 맞추기
+						type: "video",
+					},
+				});
+			}
+
+			setIsReceiving(false);
+			setIsInCall(true);
+			navigate("/video-call");
+		} catch (error) {
+			console.error("handleAccept 오류:", error);
+			alert("통화 연결에 실패했습니다: " + error.message);
+		}
+	};
+
+	if (!callerInfo) return null;
 
 	return (
 		<ModalOverlay>
 			<ModalContent>
-				<Title>📲 {callerInfo.id}님의 영상 통화 요청</Title>
+				<Title>{callerInfo.id}님의 통화가 왔습니다.</Title>
 				<ButtonGroup>
 					<Button accept onClick={handleAccept} variant='primary'>
 						<i className='fas fa-phone'></i> 수락

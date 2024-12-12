@@ -47,25 +47,25 @@ interface CallState {
 	setSignaling: (ws: WebSocket) => void;
 	setIsReceiving: (isReceiving: boolean) => void;
 	setIsPending: (isPending: boolean) => void;
-	setCallerInfo: (callerInfo: CallState['callerInfo']) => void;
+	setCallerInfo: (callerInfo: CallState["callerInfo"]) => void;
 	setIsCalling: (isCalling: boolean) => void;
 	setIsInCall: (isInCall: boolean) => void;
 }
 
 export const useCallStore = create<CallState>((set) => ({
 	friends: [
-		{ 
-			id: 1, 
-			name: "박유경", 
+		{
+			id: 1,
+			name: "박유경",
 			signalingId: "박유경",
-			profileImage: "https://via.placeholder.com/50" 
+			profileImage: "https://via.placeholder.com/50",
 		},
-		{ 
-			id: 2, 
-			name: "강재구", 
-			signalingId: "강재구",
-			profileImage: "https://via.placeholder.com/50"
-		}
+		{
+			id: 2,
+			name: "박상준",
+			signalingId: "박상준",
+			profileImage: "https://via.placeholder.com/50",
+		},
 	],
 
 	selectedFriend: null,
@@ -87,27 +87,29 @@ export const useCallStore = create<CallState>((set) => ({
 
 	selectFriend: (friend) => set({ selectedFriend: friend }),
 	startCall: (type) => {
-		console.log('startCall 호출됨:', type);
-		set({ 
-			isCalling: true, 
+		console.log("startCall 호출됨:", type);
+		set({
+			isCalling: true,
 			isCallPending: true,
-			callType: type 
+			callType: type,
 		});
 	},
-	receiveCall: () => set({
-		isReceiving: false,
-		isInCall: true,
-		isCalling: false,
-		isPending: false,
-		callType: 'video'
-	}),
-	rejectCall: () => set({
-		isReceiving: false,
-		isInCall: false,
-		isCalling: false,
-		isPending: false,
-		callerInfo: null
-	}),
+	receiveCall: () =>
+		set({
+			isReceiving: false,
+			isInCall: true,
+			isCalling: false,
+			isPending: false,
+			callType: "video",
+		}),
+	rejectCall: () =>
+		set({
+			isReceiving: false,
+			isInCall: false,
+			isCalling: false,
+			isPending: false,
+			callerInfo: null,
+		}),
 	endCall: () =>
 		set({
 			isCalling: false,
@@ -130,19 +132,19 @@ export const useCallStore = create<CallState>((set) => ({
 	setPeerConnection: (pc) => set({ peerConnection: pc }),
 	setSignaling: (ws) => set({ signaling: ws }),
 	setIsReceiving: (isReceiving: boolean) => {
-		console.log('setIsReceiving:', isReceiving);
+		console.log("setIsReceiving:", isReceiving);
 		set({ isReceiving });
 	},
 	setIsPending: (isPending) => {
-		console.log('setIsPending 호출됨:', isPending);
+		console.log("setIsPending 호출됨:", isPending);
 		set({ isPending });
 	},
-	setCallerInfo: (callerInfo: CallState['callerInfo']) => {
-		console.log('setCallerInfo:', callerInfo);
+	setCallerInfo: (callerInfo: CallState["callerInfo"]) => {
+		console.log("setCallerInfo:", callerInfo);
 		set({ callerInfo });
 	},
 	setIsCalling: (isCalling) => {
-		console.log('setIsCalling 호출됨:', isCalling);
+		console.log("setIsCalling 호출됨:", isCalling);
 		set((state) => ({ ...state, isCalling }));
 	},
 	setIsInCall: (isInCall) => set({ isInCall }),

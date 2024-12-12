@@ -10,9 +10,10 @@ const FormContainer = styled.div`
 	background-color: ${theme.colors.white};
 	padding: ${theme.spacing.lg};
 	border-radius: ${theme.radius.lg};
-	max-width: 400px;
+	width: 70%;
+	max-width: 700px;
+	height: 40vh;
 	margin: ${theme.spacing.xl} auto;
-	margin-top: 175px;
 	box-shadow: ${theme.shadows.medium};
 	text-align: center;
 
@@ -24,7 +25,7 @@ const FormContainer = styled.div`
 
 const Title = styled.h2`
 	font-family: ${theme.fonts.secondary};
-	margin-bottom: ${theme.spacing.md};
+	margin-bottom: 50px;
 	font-size: 24px;
 
 	@media (max-width: ${theme.breakpoints.mobile}) {

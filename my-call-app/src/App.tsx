@@ -12,13 +12,14 @@ import styled from "styled-components";
 import GlobalStyle from "./globalStyles";
 import { theme } from "./theme";
 import { useSignaling } from "./hooks/useSignaling";
-import CallButton from './components/CallButton';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import CallButton from "./components/CallButton";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 const AppContainer = styled.div`
 	font-family: ${theme.fonts.primary};
 	background: ${theme.colors.background};
 	min-height: 100vh;
+	width: 100vw;
 	display: flex;
 	flex-direction: column;
 	align-items: center; /* 중앙 정렬 */
@@ -34,8 +35,7 @@ const Header = styled.header`
 	text-align: center;
 	border-radius: ${theme.radius.md};
 	box-shadow: ${theme.shadows.medium};
-	width: 100%;
-	max-width: 800px;
+	width: 97%;
 	margin-bottom: ${theme.spacing.lg};
 	position: relative;
 
@@ -69,19 +69,24 @@ const Header = styled.header`
 
 const MainContent = styled.main`
 	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	text-align: center;
 	padding: ${theme.spacing.xl} ${theme.spacing.md};
 	width: 100%;
-	max-width: 800px;
+	height: 100%; /* 부모 컨테이너의 높이를 채우도록 설정 */
 
 	@media (max-width: ${theme.breakpoints.mobile}) {
 		padding: ${theme.spacing.lg} ${theme.spacing.sm};
+		width: 90%; /* 작은 화면에서는 더 좁게 설정 */
 	}
 `;
 
 const App: React.FC = () => {
 	const { user } = useAuthStore();
-	const { sendMessage } = useSignaling(user?.signalingId || '');
+	const { sendMessage } = useSignaling(user?.signalingId || "");
 
 	const { isInCall, isReceiving, isCalling, isPending } = useCallStore();
 	const { isAuthenticated, logout } = useAuthStore();
@@ -100,7 +105,7 @@ const App: React.FC = () => {
 				<GlobalStyle />
 				<AppContainer>
 					<Header>
-						<h1>🌐 영상 통화 앱</h1>
+						<h1>Handy</h1>
 					</Header>
 					<MainContent>
 						{isSignUp ? (
@@ -119,8 +124,8 @@ const App: React.FC = () => {
 			<GlobalStyle />
 			<AppContainer>
 				<Header>
-					<h1>🌐 영상 통화 앱</h1>
-					<button onClick={logout}>로그아웃</button>
+					<h1>Handy</h1>
+					<button onClick={logout}>LogOut</button>
 				</Header>
 				<MainContent>
 					{isPending && <CallPending />}

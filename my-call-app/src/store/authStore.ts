@@ -17,12 +17,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 	user: null,
 	login: async (username: string, password: string) => {
 		try {
-			const response = await fetch("http://localhost:8679/user/login", {
+			const response = await fetch("http://localhost:8678/user/login", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				credentials: 'include',
+				credentials: "include",
 				body: JSON.stringify({ username, password }),
 			});
 
@@ -31,18 +31,18 @@ export const useAuthStore = create<AuthState>((set) => ({
 			}
 
 			const data = await response.json();
-			
-			set({ 
+
+			set({
 				isAuthenticated: true,
 				user: {
 					username: data.username,
-					signalingId: data.signalingId || username
-				}
+					signalingId: data.signalingId || username,
+				},
 			});
 		} catch (error) {
 			console.error("로그인 오류:", error);
 			throw error;
 		}
 	},
-	logout: () => set({ isAuthenticated: false, user: null })
+	logout: () => set({ isAuthenticated: false, user: null }),
 }));
